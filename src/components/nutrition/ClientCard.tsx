@@ -15,7 +15,7 @@ export function ClientCard({ image, clientName, nextAppointment, serviceType, on
       switch(type) {
           case 'Nutrition':
               return (
-                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-wider">
+                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-nutrition-100 text-nutrition-700 text-[10px] font-bold uppercase tracking-wider">
                       <Utensils className="w-3 h-3" />
                       Nutrición
                   </div>
@@ -50,9 +50,9 @@ export function ClientCard({ image, clientName, nextAppointment, serviceType, on
     >
       {/* Left side: Image with soft background blob */}
       <div className="relative shrink-0">
-        <div className="w-20 h-20 rounded-lg bg-emerald-50 relative overflow-hidden flex items-center justify-center">
+        <div className="w-20 h-20 rounded-lg bg-nutrition-50 relative overflow-hidden flex items-center justify-center">
             {/* Soft blob behind image (decorative) */}
-            <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-100 rounded-full blur-xl opacity-60 translate-x-4 -translate-y-4" />
+            <div className="absolute top-0 right-0 w-16 h-16 bg-nutrition-100 rounded-full blur-xl opacity-60 translate-x-4 -translate-y-4" />
             
             <img 
                 src={image} 
@@ -81,7 +81,7 @@ export function ClientCard({ image, clientName, nextAppointment, serviceType, on
 
         <div className="flex items-center gap-4">
             {nextAppointment ? (
-                <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-nutrition-600 bg-nutrition-50 px-2.5 py-1 rounded-full">
                     <Calendar className="w-3.5 h-3.5" />
                     <span>Proxima cita en nutrición: {new Date(nextAppointment).toLocaleDateString()}</span>
                 </div>
@@ -100,8 +100,8 @@ export function ClientCard({ image, clientName, nextAppointment, serviceType, on
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         className="shrink-0 w-10 h-10 rounded-full 
-        bg-emerald-50 flex items-center justify-center 
-        text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white 
+        bg-nutrition-50 flex items-center justify-center 
+        text-nutrition-600 group-hover:bg-nutrition-500 group-hover:text-white 
         transition-colors duration-200 hover:cursor-pointer
         hover:shadow-md
         "

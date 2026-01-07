@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, devtools } from 'zustand/middleware';
 import i18n from '../i18n';
 
 export type Language = 'es' | 'en';
@@ -12,31 +12,34 @@ interface LanguageState {
 }
 
 export const useLanguageStore = create<LanguageState>()(
-  persist(
-    (set, get) => ({
-      language: 'es',
+  devtools(
+    persist(
+      (set, get) => ({
+        language: 'es',
 
-      setLanguage: (lang: Language) => {
-        i18n.changeLanguage(lang);
-        set({ language: lang });
-      },
+        setLanguage: (lang: Language) => {
+          i18n.changeLanguage(lang);
+          set({ language: lang });
+        },
 
-      initFromUser: (preferredLanguage?: Language) => {
-        if (preferredLanguage) {
-          i18n.changeLanguage(preferredLanguage);
-          set({ language: preferredLanguage });
-        }
-      },
+        initFromUser: (preferredLanguage?: Language) => {
+          if (preferredLanguage) {
+            i18n.changeLanguage(preferredLanguage);
+            set({ language: preferredLanguage });
+          }
+        },
 
-      syncWithI18n: () => {
-        const { language } = get();
-        i18n.changeLanguage(language);
-      },
-    }),
-    {
-      name: 'fitpilot_language',
-      partialize: (state) => ({ language: state.language }),
-    }
+        syncWithI18n: () => {
+          const { language } = get();
+          i18n.changeLanguage(language);
+        },
+      }),
+      {
+        name: 'fitpilot_language',
+        partialize: (state) => ({ language: state.language }),
+      }
+    ),
+    { name: 'LanguageStore' }
   )
 );
 

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 import { authService } from '../services/auth';
 import type { User, Language } from '../types/api';
 import type { LoginCredentials } from '../types/auth';
@@ -20,99 +21,104 @@ interface AuthState {
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  token: authService.getToken(),
-  isAuthenticated: authService.isAuthenticated(),
-  isLoading: false,
-  error: null,
-
-  login: async (credentials: LoginCredentials) => {
-    set({ isLoading: true, error: null });
-
-    try {
-      const response = await authService.login(credentials);
-      set({ token: response.access_token, isAuthenticated: true });
-
-      // Load user profile after successful login
-      await get().loadUser();
-    } catch (error: any) {
-      const errorMessage = error.message || 'Login failed. Please try again.';
-      set({ error: errorMessage, isAuthenticated: false, user: null });
-      throw error;
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
-  logout: () => {
-    authService.logout();
-    set({
+export const useAuthStore = create<AuthState>()(
+  devtools(
+    (set, get) => ({
       user: null,
-      token: null,
-      isAuthenticated: false,
+      token: authService.getToken(),
+      isAuthenticated: authService.isAuthenticated(),
+      isLoading: false,
       error: null,
-    });
-  },
 
-  setUser: (user: User | null) => {
-    set({ user });
-  },
+      login: async (credentials: LoginCredentials) => {
+        set({ isLoading: true, error: null });
 
-  loadUser: async () => {
-    const token = authService.getToken();
+        try {
+          const response = await authService.login(credentials);
+          set({ token: response.access_token, isAuthenticated: true });
 
-    if (!token) {
-      set({ isAuthenticated: false, user: null });
-      return;
-    }
+          // Load user profile after successful login
+          await get().loadUser();
+        } catch (error: any) {
+          const errorMessage = error.message || 'Login failed. Please try again.';
+          set({ error: errorMessage, isAuthenticated: false, user: null });
+          throw error;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
 
-    set({ isLoading: true });
+      logout: () => {
+        authService.logout();
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          error: null,
+        });
+      },
 
-    try {
-      const user = await authService.getCurrentUser();
-      set({
-        user,
-        isAuthenticated: true,
-        token,
-        error: null,
-      });
+      setUser: (user: User | null) => {
+        set({ user });
+      },
 
-      // Sync language with user's preference
-      if (user.preferred_language) {
-        useLanguageStore.getState().initFromUser(user.preferred_language);
-      }
-    } catch (error: any) {
-      // If user fetch fails, clear auth
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        error: error.message,
-      });
-      authService.logout();
-    } finally {
-      set({ isLoading: false });
-    }
-  },
+      loadUser: async () => {
+        const token = authService.getToken();
 
-  updatePreferredLanguage: async (language: Language) => {
-    const { user } = get();
-    if (!user) return;
+        if (!token) {
+          set({ isAuthenticated: false, user: null });
+          return;
+        }
 
-    try {
-      const updatedUser = await authService.updateUser({ preferred_language: language });
-      set({ user: updatedUser });
+        set({ isLoading: true });
 
-      // Also update local language store
-      useLanguageStore.getState().setLanguage(language);
-    } catch (error: any) {
-      console.error('Failed to update language preference:', error);
-      throw error;
-    }
-  },
+        try {
+          const user = await authService.getCurrentUser();
+          set({
+            user,
+            isAuthenticated: true,
+            token,
+            error: null,
+          });
 
-  clearError: () => {
-    set({ error: null });
-  },
-}));
+          // Sync language with user's preference
+          if (user.preferred_language) {
+            useLanguageStore.getState().initFromUser(user.preferred_language);
+          }
+        } catch (error: any) {
+          // If user fetch fails, clear auth
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+            error: error.message,
+          });
+          authService.logout();
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      updatePreferredLanguage: async (language: Language) => {
+        const { user } = get();
+        if (!user) return;
+
+        try {
+          const updatedUser = await authService.updateUser({ preferred_language: language });
+          set({ user: updatedUser });
+
+          // Also update local language store
+          useLanguageStore.getState().setLanguage(language);
+        } catch (error: any) {
+          console.error('Failed to update language preference:', error);
+          throw error;
+        }
+      },
+
+      clearError: () => {
+        set({ error: null });
+      },
+    }),
+    { name: 'AuthStore' }
+  )
+);

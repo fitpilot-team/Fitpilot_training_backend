@@ -37,6 +37,7 @@ export function Button({
       hover:shadow-xl hover:shadow-blue-500/30
       focus:ring-blue-500
       active:scale-[0.98]
+      hover:cursor-pointer
     `,
     secondary: `
       bg-gradient-to-r from-gray-100 to-gray-200
@@ -45,6 +46,7 @@ export function Button({
       hover:shadow-lg hover:shadow-gray-400/30
       focus:ring-gray-400
       active:scale-[0.98]
+      hover:cursor-pointer
     `,
     danger: `
       bg-gradient-to-r from-red-500 via-red-600 to-red-700
@@ -53,12 +55,14 @@ export function Button({
       hover:shadow-xl hover:shadow-red-500/30
       focus:ring-red-500
       active:scale-[0.98]
+      hover:cursor-pointer
     `,
     ghost: `
       bg-transparent hover:bg-gray-100/80
       text-gray-700 hover:text-gray-900
       focus:ring-gray-400
       active:scale-[0.98]
+      hover:cursor-pointer
     `,
   };
 

@@ -156,7 +156,12 @@ export function NutritionClientDetailPage() {
       return (
           <div className="p-8 text-center">
               <p className="text-gray-500 mb-4">Cliente no encontrado</p>
-              <button onClick={() => navigate(-1)} className="text-emerald-600 font-medium">Volver</button>
+              <button 
+                onClick={() => navigate(-1)} 
+                className="text-nutrition-600 font-medium hover:cursor-pointer"
+            >
+                Volver
+            </button>
           </div>
       );
   }
@@ -191,7 +196,7 @@ export function NutritionClientDetailPage() {
                         <div className="p-6">
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
+                            <div className="p-2.5 rounded-xl bg-nutrition-50 text-nutrition-600">
                                 <TrendingUp className="w-5 h-5" />
                             </div>
                             <div>
@@ -252,9 +257,9 @@ export function NutritionClientDetailPage() {
                              <span className="text-gray-500">Inicial: </span>
                              <span className="font-semibold text-gray-900">{client?.metrics?.startWeight} {client?.metrics?.weightUnit}</span>
                          </div>
-                         <div className="bg-emerald-50 px-4 py-2 rounded-xl">
-                             <span className="text-emerald-600">Actual: </span>
-                             <span className="font-bold text-emerald-700">{client?.metrics?.currentWeight} {client?.metrics?.weightUnit}</span>
+                         <div className="bg-nutrition-50 px-4 py-2 rounded-xl">
+                             <span className="text-nutrition-600">Actual: </span>
+                             <span className="font-bold text-nutrition-700">{client?.metrics?.currentWeight} {client?.metrics?.weightUnit}</span>
                          </div>
                     </div>
                         </div>
@@ -354,7 +359,7 @@ export function NutritionClientDetailPage() {
                         >
                             Cerrar
                         </button>
-                        <button className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 flex items-center gap-2">
+                        <button className="px-5 py-2.5 rounded-xl bg-nutrition-600 text-white font-medium hover:bg-nutrition-700 transition-colors shadow-lg shadow-nutrition-200 flex items-center gap-2">
                             <Edit2 className="w-4 h-4" />
                             Editar Registro
                         </button>
@@ -369,12 +374,15 @@ export function NutritionClientDetailPage() {
       {/* Header / Back Button */}
       <button 
         onClick={() => navigate(-1)} 
-        className="flex items-center text-gray-500 hover:text-emerald-600 transition-colors gap-2 group"
+        className="flex items-center text-gray-500 
+        hover:text-nutrition-600 transition-colors gap-2 group
+        hover:cursor-pointer
+        "
       >
-        <div className="p-2 rounded-full bg-white border border-gray-200 group-hover:border-emerald-200 group-hover:bg-emerald-50 transition-colors">
+        <div className="p-2 rounded-full bg-white border border-gray-200 group-hover:border-nutrition-200 group-hover:bg-nutrition-50 transition-colors">
             <ArrowLeft className="w-4 h-4" />
         </div>
-        <span className="text-sm font-medium">Volver</span>
+        <span className="text-sm font-medium ">Volver</span>
       </button>
 
       {/* Main Content Info */}
@@ -385,7 +393,7 @@ export function NutritionClientDetailPage() {
         className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden"
       >
         {/* Banner/Header of Card */}
-        <div className="h-32 bg-linear-to-r from-emerald-50 to-teal-50 border-b border-gray-100 relative">
+        <div className="h-32 bg-linear-to-r from-nutrition-50 to-nutrition-100 border-b border-gray-100 relative">
              <div className="absolute -bottom-10 left-8">
                  <div className="w-24 h-24 rounded-2xl bg-white p-1 shadow-sm">
                     <img src={client.avatar} alt={client.firstName} className="w-full h-full object-cover rounded-xl" />
@@ -410,7 +418,7 @@ export function NutritionClientDetailPage() {
 
             <div className="flex items-center gap-3">
                  {client.nextAppointment && (
-                     <div className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium flex items-center gap-2">
+                     <div className="px-4 py-2 bg-nutrition-50 text-nutrition-700 rounded-xl text-sm font-medium flex items-center gap-2">
                         <Calendar className="w-4 h-4" />
                         Próxima cita: {new Date(client.nextAppointment).toLocaleDateString()}
                      </div>
@@ -480,13 +488,13 @@ export function NutritionClientDetailPage() {
                                 whileHover={{ scale: 1.02, y: -2 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => setIsWeightChartOpen(true)}
-                                className="p-4 rounded-2xl bg-emerald-50 cursor-pointer hover:shadow-md hover:shadow-emerald-100 transition-all duration-200 relative group"
+                                className="p-4 rounded-2xl bg-nutrition-50 cursor-pointer hover:shadow-md hover:shadow-nutrition-100 transition-all duration-200 relative group"
                             >
                                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                                    <TrendingUp className="w-4 h-4 text-nutrition-600" />
                                 </div>
-                                <p className="text-xs text-emerald-600 mb-1">Peso Actual</p>
-                                <p className="text-xl font-bold text-emerald-700">{client.metrics?.currentWeight || '-'} {client.metrics?.weightUnit}</p>
+                                <p className="text-xs text-nutrition-600 mb-1">Peso Actual</p>
+                                <p className="text-xl font-bold text-nutrition-700">{client.metrics?.currentWeight || '-'} {client.metrics?.weightUnit}</p>
                             </motion.div>
                             <div className="p-4 rounded-2xl bg-blue-50">
                                 <p className="text-xs text-blue-600 mb-1">Adherencia</p>
@@ -505,15 +513,15 @@ export function NutritionClientDetailPage() {
                         <div className="space-y-2">
                             <button className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors flex justify-between items-center group">
                                 Asignar nueva dieta
-                                <ArrowLeft className="w-4 h-4 rotate-180 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                                <ArrowLeft className="w-4 h-4 rotate-180 text-gray-400 group-hover:text-nutrition-500 transition-colors" />
                             </button>
                             <button className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors flex justify-between items-center group">
                                 Ver historial de citas
-                                <ArrowLeft className="w-4 h-4 rotate-180 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                                <ArrowLeft className="w-4 h-4 rotate-180 text-gray-400 group-hover:text-nutrition-500 transition-colors" />
                             </button>
                             <button className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors flex justify-between items-center group">
                                 Enviar mensaje
-                                <ArrowLeft className="w-4 h-4 rotate-180 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                                <ArrowLeft className="w-4 h-4 rotate-180 text-gray-400 group-hover:text-nutrition-500 transition-colors" />
                             </button>
                         </div>
                     </div>
@@ -522,7 +530,7 @@ export function NutritionClientDetailPage() {
                 {/* Clinical Record Section */}
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                     <div className="flex items-center gap-3 mb-8 border-b border-gray-100 pb-4">
-                        <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                        <div className="p-2 bg-nutrition-50 rounded-lg text-nutrition-600">
                             <FileText className="w-6 h-6" />
                         </div>
                         <h2 className="text-xl font-bold text-gray-900">Expediente Clínico</h2>
@@ -531,7 +539,7 @@ export function NutritionClientDetailPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
                         {/* Column 1: Anthropometry */}
                         <div className="space-y-6">
-                            <div className="flex items-center gap-2 text-emerald-700 font-semibold mb-2">
+                            <div className="flex items-center gap-2 text-nutrition-700 font-semibold mb-2">
                                 <Ruler className="w-5 h-5" />
                                 <h3>Antropometría</h3>
                             </div>
@@ -662,7 +670,7 @@ export function NutritionClientDetailPage() {
                                     <tr key={appt.id} className="group hover:bg-gray-50/80 transition-colors">
                                         <td className="py-4 pl-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">
+                                                <div className="w-8 h-8 rounded-full bg-nutrition-50 text-nutrition-600 flex items-center justify-center text-xs font-bold">
                                                     {new Date(appt.date).getDate()}
                                                 </div>
                                                 <span className="font-medium text-gray-900">{appt.date}</span>
@@ -688,7 +696,7 @@ export function NutritionClientDetailPage() {
                                                 </button>
                                                 <button 
                                                     onClick={() => setSelectedAppointment(appt)}
-                                                    className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors tooltip"
+                                                    className="p-2 rounded-lg text-gray-400 hover:text-nutrition-600 hover:bg-nutrition-50 transition-colors tooltip"
                                                     title="Editar registro"
                                                 >
                                                     <Edit2 className="w-4 h-4" />

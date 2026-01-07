@@ -14,7 +14,7 @@ import {
   ChevronDownIcon,
   PlusCircleIcon,
 } from '@heroicons/react/24/outline';
-import { Dumbbell, Apple, Utensils } from 'lucide-react';
+import { Dumbbell, Apple, Utensils, Calendar } from 'lucide-react';
 import fitPilotLogo from '../../assets/favicon.ico';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
@@ -45,6 +45,7 @@ const clientNavigationConfig = [
 
 const nutritionConfig = [
   { nameKey: 'dashboard', href: '/nutrition', icon: HomeIcon },
+  { nameKey: 'agenda', href: '/nutrition/agenda', icon: Calendar },
   { nameKey: 'nutritionClients', href: '/nutrition/clients', icon: UsersIcon },
   { nameKey: 'nutritionCreateDiet', href: '/nutrition/create-diet', icon: PlusCircleIcon },
 ];
@@ -106,7 +107,7 @@ export function Sidebar() {
       >
         <div className="flex items-center gap-3">
           <motion.div
-            className="flex-shrink-0 w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 via-blue-600 to-blue-700
+            className="shrink-0 w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 via-blue-600 to-blue-700
                        flex items-center justify-center shadow-lg shadow-blue-500/30 overflow-hidden"
             whileHover={{ scale: 1.05, rotate: 5 }}
             transition={{ duration: 0.2 }}
@@ -171,7 +172,7 @@ export function Sidebar() {
                 )}
 
                 <motion.div
-                  className={`flex-shrink-0 p-2 rounded-lg transition-colors duration-200
+                  className={`shrink-0 p-2 rounded-lg transition-colors duration-200
                     ${isActive
                       ? 'bg-linear-to-br from-blue-500 to-blue-600 shadow-md shadow-blue-500/25'
                       : 'bg-gray-100 group-hover:bg-gray-200'
@@ -214,140 +215,140 @@ export function Sidebar() {
 
       {/* Nutrition Section */}
       <div className="mx-3 my-2 border-t border-gray-200/50" />
-      
+
       <nav className="px-3 space-y-2">
         <div className="px-3 mb-2">
-            <AnimatePresence>
+          <AnimatePresence>
             {isExpanded && (
-                <motion.p
+              <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="text-xs font-semibold text-gray-400 uppercase tracking-wider"
-                >
+              >
                 {t('nav.nutrition')}
-                </motion.p>
+              </motion.p>
             )}
-            </AnimatePresence>
+          </AnimatePresence>
         </div>
-        
+
         {/* Nutrition Dropdown Toggle */}
         <div className="relative group">
-            <button
-                onClick={() => {
-                    if (!isExpanded) {
-                        setIsExpanded(true);
-                        setIsNutritionOpen(true);
-                    } else {
-                        setIsNutritionOpen((prev) => !prev);
-                    }
-                }}
-                className={`
+          <button
+            onClick={() => {
+              if (!isExpanded) {
+                setIsExpanded(true);
+                setIsNutritionOpen(true);
+              } else {
+                setIsNutritionOpen((prev) => !prev);
+              }
+            }}
+            className={`
                     w-full flex items-center gap-3 py-3 rounded-xl
                     transition-all duration-200 relative overflow-hidden
                     ${isExpanded ? 'px-3' : 'justify-center'}
                     ${location.pathname.startsWith('/nutrition')
-                    ? 'bg-linear-to-r from-emerald-500/10 to-emerald-600/5 text-emerald-700'
-                    : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
-                    }
+                ? 'bg-linear-to-r from-emerald-500/10 to-emerald-600/5 text-emerald-700'
+                : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
+              }
                 `}
-            >
-                <motion.div
-                    className={`flex-shrink-0 p-2 rounded-lg transition-colors duration-200
+          >
+            <motion.div
+              className={`shrink-0 p-2 rounded-lg transition-colors duration-200
                     ${location.pathname.startsWith('/nutrition')
-                        ? 'bg-linear-to-br from-emerald-500 to-emerald-600 shadow-md shadow-emerald-500/25'
-                        : 'bg-gray-100 group-hover:bg-gray-200'
-                    }`}
-                    whileHover={{ scale: 1.1 }}
-                >
-                    <Utensils className={`h-5 w-5 ${location.pathname.startsWith('/nutrition') ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                </motion.div>
+                  ? 'bg-linear-to-br from-emerald-500 to-emerald-600 shadow-md shadow-emerald-500/25'
+                  : 'bg-gray-100 group-hover:bg-gray-200'
+                }`}
+              whileHover={{ scale: 1.1 }}
+            >
+              <Utensils className={`h-5 w-5 ${location.pathname.startsWith('/nutrition') ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'}`} />
+            </motion.div>
 
-                <AnimatePresence mode="wait">
-                    {isExpanded && (
-                    <motion.span
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ duration: 0.15 }}
-                        className={`font-medium whitespace-nowrap flex-1 text-left ${location.pathname.startsWith('/nutrition') ? 'text-emerald-700' : ''}`}
-                    >
-                        {t('nav.nutrition')}
-                    </motion.span>
-                    )}
-                </AnimatePresence>
-                
-                {isExpanded && (
-                    <motion.div
-                        initial={{ rotate: -90, opacity: 0 }}
-                        animate={{ 
-                            rotate: isNutritionOpen ? 0 : -90,
-                            opacity: 1
-                        }}
-                        transition={{ duration: 0.2 }}
-                    >
-                         <ChevronDownIcon className="h-4 w-4" />
-                    </motion.div>
-                )}
-            </button>
+            <AnimatePresence mode="wait">
+              {isExpanded && (
+                <motion.span
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.15 }}
+                  className={`font-medium whitespace-nowrap flex-1 text-left ${location.pathname.startsWith('/nutrition') ? 'text-emerald-700' : ''}`}
+                >
+                  {t('nav.nutrition')}
+                </motion.span>
+              )}
+            </AnimatePresence>
+
+            {isExpanded && (
+              <motion.div
+                initial={{ rotate: -90, opacity: 0 }}
+                animate={{
+                  rotate: isNutritionOpen ? 0 : -90,
+                  opacity: 1
+                }}
+                transition={{ duration: 0.2 }}
+              >
+                <ChevronDownIcon className="h-4 w-4" />
+              </motion.div>
+            )}
+          </button>
         </div>
 
         {/* Nutrition Submenu */}
         <AnimatePresence>
-            {isExpanded && isNutritionOpen && (
-                <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden pl-4"
-                >
-                    {nutritionConfig.map((item) => {
-                    const isActive = item.href === '/nutrition' 
-                        ? location.pathname === item.href 
-                        : location.pathname.startsWith(item.href);
-                    const Icon = item.icon;
-                    const itemName = t(`nav.${item.nameKey}`);
+          {isExpanded && isNutritionOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden pl-4"
+            >
+              {nutritionConfig.map((item) => {
+                const isActive = item.href === '/nutrition'
+                  ? location.pathname === item.href
+                  : location.pathname.startsWith(item.href);
+                const Icon = item.icon;
+                const itemName = t(`nav.${item.nameKey}`);
 
-                    return (
-                        <Link
-                        key={item.nameKey}
-                        to={item.href}
-                        className="group relative block mt-1"
-                        >
-                        <motion.div
-                            className={`
+                return (
+                  <Link
+                    key={item.nameKey}
+                    to={item.href}
+                    className="group relative block mt-1"
+                  >
+                    <motion.div
+                      className={`
                             flex items-center gap-3 px-3 py-2 rounded-xl
                             transition-all duration-200 relative overflow-hidden
                             ${isActive
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-700'
-                            }
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-700'
+                        }
                             `}
-                            whileHover={{ x: 4 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                             {/* Active indicator */}
-                            {isActive && (
-                            <motion.div
-                                layoutId="nutritionSubActiveIndicator"
-                                className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 rounded-r-full
+                      whileHover={{ x: 4 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {/* Active indicator */}
+                      {isActive && (
+                        <motion.div
+                          layoutId="nutritionSubActiveIndicator"
+                          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 rounded-r-full
                                         bg-emerald-500"
-                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                            />
-                            )}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        />
+                      )}
 
-                            <Icon className={`h-4 w-4 ${isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-emerald-600'}`} />
+                      <Icon className={`h-4 w-4 ${isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-emerald-600'}`} />
 
-                            <span className="text-sm font-medium whitespace-nowrap">
-                                {itemName}
-                            </span>
-                        </motion.div>
-                        </Link>
-                    );
-                    })}
-                </motion.div>
-            )}
+                      <span className="text-sm font-medium whitespace-nowrap">
+                        {itemName}
+                      </span>
+                    </motion.div>
+                  </Link>
+                );
+              })}
+            </motion.div>
+          )}
         </AnimatePresence>
       </nav>
 
@@ -368,7 +369,7 @@ export function Sidebar() {
             <div className="px-3 py-2">
               <div className="flex items-center gap-3">
                 <motion.div
-                  className="flex-shrink-0 w-9 h-9 rounded-lg bg-linear-to-br from-emerald-500 to-teal-600
+                  className="shrink-0 w-9 h-9 rounded-lg bg-linear-to-br from-emerald-500 to-teal-600
                              flex items-center justify-center shadow-md shadow-emerald-500/25"
                   whileHover={{ scale: 1.05 }}
                 >
@@ -434,7 +435,7 @@ export function Sidebar() {
                       )}
 
                       <motion.div
-                        className={`flex-shrink-0 p-2 rounded-lg transition-colors duration-200
+                        className={`shrink-0 p-2 rounded-lg transition-colors duration-200
                           ${isActive
                             ? 'bg-linear-to-br from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/25'
                             : 'bg-gray-100 group-hover:bg-gray-200'
@@ -488,7 +489,7 @@ export function Sidebar() {
         >
           <div className="flex items-center gap-3">
             <motion.div
-              className="flex-shrink-0 h-10 w-10 rounded-xl bg-linear-to-br from-blue-500 to-blue-700
+              className="shrink-0 h-10 w-10 rounded-xl bg-linear-to-br from-blue-500 to-blue-700
                          flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/25"
               whileHover={{ scale: 1.05 }}
             >

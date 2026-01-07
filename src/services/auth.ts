@@ -7,9 +7,6 @@ export const authService = {
   /**
    * Login with email and password
    */
-  /**
-   * Login with email and password
-   */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     // const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
     console.log('BYPASS: Logging in with mock credentials', credentials);

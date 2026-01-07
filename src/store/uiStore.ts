@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 
 interface UIState {
   isSidebarOpen: boolean;
@@ -12,24 +13,29 @@ interface UIState {
   closeModal: () => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
-  isSidebarOpen: true,
-  activeModal: null,
-  modalData: null,
+export const useUIStore = create<UIState>()(
+  devtools(
+    (set) => ({
+      isSidebarOpen: true,
+      activeModal: null,
+      modalData: null,
 
-  toggleSidebar: () => {
-    set((state) => ({ isSidebarOpen: !state.isSidebarOpen }));
-  },
+      toggleSidebar: () => {
+        set((state) => ({ isSidebarOpen: !state.isSidebarOpen }), false, 'toggleSidebar');
+      },
 
-  setSidebarOpen: (isOpen: boolean) => {
-    set({ isSidebarOpen: isOpen });
-  },
+      setSidebarOpen: (isOpen: boolean) => {
+        set({ isSidebarOpen: isOpen }, false, 'setSidebarOpen');
+      },
 
-  openModal: (modalId: string, data?: any) => {
-    set({ activeModal: modalId, modalData: data });
-  },
+      openModal: (modalId: string, data?: any) => {
+        set({ activeModal: modalId, modalData: data }, false, 'openModal');
+      },
 
-  closeModal: () => {
-    set({ activeModal: null, modalData: null });
-  },
-}));
+      closeModal: () => {
+        set({ activeModal: null, modalData: null }, false, 'closeModal');
+      },
+    }),
+    { name: 'UIStore' }
+  )
+);

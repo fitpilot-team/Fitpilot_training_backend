@@ -14,6 +14,19 @@
   --color-primary-900: #1e3a8a;
 
   --color-diet-primary-500: #10B981;
+
+  /* Nutrition Theme Colors (Emerald) */
+  --color-nutrition-50: #ecfdf5;
+  --color-nutrition-100: #d1fae5;
+  --color-nutrition-200: #a7f3d0;
+  --color-nutrition-300: #6ee7b7;
+  --color-nutrition-400: #34d399;
+  --color-nutrition-500: #10b981;
+  --color-nutrition-600: #059669;
+  --color-nutrition-700: #047857;
+  --color-nutrition-800: #065f46;
+  --color-nutrition-900: #064e3b;
+  --color-nutrition-950: #022c22;
 }
 
 body {

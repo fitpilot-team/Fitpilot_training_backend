@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 import type {
   Macrocycle,
   Mesocycle,
@@ -77,499 +78,504 @@ interface MesocycleState {
   moveExerciseBetweenDays: (exerciseId: string, fromDayId: string, toDayId: string, newIndex: number) => Promise<void>;
 }
 
-export const useMesocycleStore = create<MesocycleState>((set) => ({
-  // Initial state
-  macrocycles: [],
-  currentMacrocycle: null,
-  mesocycles: {},
-  microcycles: {},
-  trainingDays: {},
-  dayExercises: {},
-  exercises: [],
-  isLoadingMacrocycles: false,
-  isLoadingMacrocycle: false,
-  isLoadingExercises: false,
-  error: null,
+export const useMesocycleStore = create<MesocycleState>()(
+  devtools(
+    (set) => ({
+      // Initial state
+      macrocycles: [],
+      currentMacrocycle: null,
+      mesocycles: {},
+      microcycles: {},
+      trainingDays: {},
+      dayExercises: {},
+      exercises: [],
+      isLoadingMacrocycles: false,
+      isLoadingMacrocycle: false,
+      isLoadingExercises: false,
+      error: null,
 
-  // =============== Macrocycles ===============
-  loadMacrocycles: async () => {
-    set({ isLoadingMacrocycles: true, error: null });
-    try {
-      const response = await mesocyclesService.getAllMacrocycles();
-      const macrocycles = Array.isArray(response) ? response : [];
-      set({ macrocycles, isLoadingMacrocycles: false });
-    } catch (error: any) {
-      set({ error: error.message, isLoadingMacrocycles: false, macrocycles: [] });
-    }
-  },
+      // =============== Macrocycles ===============
+      loadMacrocycles: async () => {
+        set({ isLoadingMacrocycles: true, error: null });
+        try {
+          const response = await mesocyclesService.getAllMacrocycles();
+          const macrocycles = Array.isArray(response) ? response : [];
+          set({ macrocycles, isLoadingMacrocycles: false });
+        } catch (error: any) {
+          set({ error: error.message, isLoadingMacrocycles: false, macrocycles: [] });
+        }
+      },
 
-  loadMacrocycle: async (id: string) => {
-    set({ isLoadingMacrocycle: true, error: null });
-    try {
-      const macrocycle = await mesocyclesService.getMacrocycleById(id);
-      set({ currentMacrocycle: macrocycle, isLoadingMacrocycle: false });
+      loadMacrocycle: async (id: string) => {
+        set({ isLoadingMacrocycle: true, error: null });
+        try {
+          const macrocycle = await mesocyclesService.getMacrocycleById(id);
+          set({ currentMacrocycle: macrocycle, isLoadingMacrocycle: false });
 
-      // Extract nested mesocycles from macrocycle response
-      if (macrocycle.mesocycles) {
-        set((state) => ({
-          mesocycles: { ...state.mesocycles, [id]: macrocycle.mesocycles },
-        }));
-
-        // Extract microcycles from each mesocycle
-        for (const meso of macrocycle.mesocycles) {
-          if (meso.microcycles) {
+          // Extract nested mesocycles from macrocycle response
+          if (macrocycle.mesocycles) {
             set((state) => ({
-              microcycles: { ...state.microcycles, [meso.id]: meso.microcycles },
+              mesocycles: { ...state.mesocycles, [id]: macrocycle.mesocycles },
             }));
 
-            // Extract training days from each microcycle
-            for (const micro of meso.microcycles) {
-              if (micro.training_days) {
+            // Extract microcycles from each mesocycle
+            for (const meso of macrocycle.mesocycles) {
+              if (meso.microcycles) {
                 set((state) => ({
-                  trainingDays: { ...state.trainingDays, [micro.id]: micro.training_days },
+                  microcycles: { ...state.microcycles, [meso.id]: meso.microcycles },
                 }));
 
-                // Extract day exercises from each training day
-                for (const day of micro.training_days) {
-                  if (day.exercises) {
+                // Extract training days from each microcycle
+                for (const micro of meso.microcycles) {
+                  if (micro.training_days) {
                     set((state) => ({
-                      dayExercises: { ...state.dayExercises, [day.id]: day.exercises },
+                      trainingDays: { ...state.trainingDays, [micro.id]: micro.training_days },
                     }));
+
+                    // Extract day exercises from each training day
+                    for (const day of micro.training_days) {
+                      if (day.exercises) {
+                        set((state) => ({
+                          dayExercises: { ...state.dayExercises, [day.id]: day.exercises },
+                        }));
+                      }
+                    }
                   }
                 }
               }
             }
           }
+        } catch (error: any) {
+          set({ error: error.message, isLoadingMacrocycle: false });
         }
-      }
-    } catch (error: any) {
-      set({ error: error.message, isLoadingMacrocycle: false });
-    }
-  },
+      },
 
-  createMacrocycle: async (data: MacrocycleCreateData) => {
-    set({ error: null });
-    try {
-      const macrocycle = await mesocyclesService.createMacrocycle(data);
-      set((state) => ({
-        macrocycles: [...state.macrocycles, macrocycle],
-      }));
-      return macrocycle;
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      createMacrocycle: async (data: MacrocycleCreateData) => {
+        set({ error: null });
+        try {
+          const macrocycle = await mesocyclesService.createMacrocycle(data);
+          set((state) => ({
+            macrocycles: [...state.macrocycles, macrocycle],
+          }));
+          return macrocycle;
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  updateMacrocycle: async (id: string, data: MacrocycleUpdateData) => {
-    set({ error: null });
-    try {
-      const updated = await mesocyclesService.updateMacrocycle(id, data);
-      set((state) => ({
-        macrocycles: state.macrocycles.map((m) => (m.id === id ? updated : m)),
-        currentMacrocycle: state.currentMacrocycle?.id === id ? updated : state.currentMacrocycle,
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      updateMacrocycle: async (id: string, data: MacrocycleUpdateData) => {
+        set({ error: null });
+        try {
+          const updated = await mesocyclesService.updateMacrocycle(id, data);
+          set((state) => ({
+            macrocycles: state.macrocycles.map((m) => (m.id === id ? updated : m)),
+            currentMacrocycle: state.currentMacrocycle?.id === id ? updated : state.currentMacrocycle,
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  deleteMacrocycle: async (id: string) => {
-    set({ error: null });
-    try {
-      await mesocyclesService.deleteMacrocycle(id);
-      set((state) => ({
-        macrocycles: state.macrocycles.filter((m) => m.id !== id),
-        currentMacrocycle: state.currentMacrocycle?.id === id ? null : state.currentMacrocycle,
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      deleteMacrocycle: async (id: string) => {
+        set({ error: null });
+        try {
+          await mesocyclesService.deleteMacrocycle(id);
+          set((state) => ({
+            macrocycles: state.macrocycles.filter((m) => m.id !== id),
+            currentMacrocycle: state.currentMacrocycle?.id === id ? null : state.currentMacrocycle,
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  setCurrentMacrocycle: (macrocycle: Macrocycle | null) => {
-    set({ currentMacrocycle: macrocycle });
-  },
+      setCurrentMacrocycle: (macrocycle: Macrocycle | null) => {
+        set({ currentMacrocycle: macrocycle });
+      },
 
-  // =============== Mesocycles ===============
-  loadMesocycles: async (macrocycleId: string) => {
-    set({ error: null });
-    try {
-      const mesocycles = await mesocyclesService.getMesocycles(macrocycleId);
-      set((state) => ({
-        mesocycles: { ...state.mesocycles, [macrocycleId]: mesocycles },
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-    }
-  },
+      // =============== Mesocycles ===============
+      loadMesocycles: async (macrocycleId: string) => {
+        set({ error: null });
+        try {
+          const mesocycles = await mesocyclesService.getMesocycles(macrocycleId);
+          set((state) => ({
+            mesocycles: { ...state.mesocycles, [macrocycleId]: mesocycles },
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+        }
+      },
 
-  createMesocycle: async (macrocycleId: string, data: MesocycleCreateData) => {
-    set({ error: null });
-    try {
-      const mesocycle = await mesocyclesService.createMesocycle(macrocycleId, data);
-      set((state) => ({
-        mesocycles: {
-          ...state.mesocycles,
-          [macrocycleId]: [...(state.mesocycles[macrocycleId] || []), mesocycle],
-        },
-      }));
-      return mesocycle;
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      createMesocycle: async (macrocycleId: string, data: MesocycleCreateData) => {
+        set({ error: null });
+        try {
+          const mesocycle = await mesocyclesService.createMesocycle(macrocycleId, data);
+          set((state) => ({
+            mesocycles: {
+              ...state.mesocycles,
+              [macrocycleId]: [...(state.mesocycles[macrocycleId] || []), mesocycle],
+            },
+          }));
+          return mesocycle;
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  updateMesocycle: async (macrocycleId: string, mesocycleId: string, data: MesocycleUpdateData) => {
-    set({ error: null });
-    try {
-      const updated = await mesocyclesService.updateMesocycle(macrocycleId, mesocycleId, data);
-      set((state) => ({
-        mesocycles: {
-          ...state.mesocycles,
-          [macrocycleId]: (state.mesocycles[macrocycleId] || []).map((m) =>
-            m.id === mesocycleId ? updated : m
-          ),
-        },
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      updateMesocycle: async (macrocycleId: string, mesocycleId: string, data: MesocycleUpdateData) => {
+        set({ error: null });
+        try {
+          const updated = await mesocyclesService.updateMesocycle(macrocycleId, mesocycleId, data);
+          set((state) => ({
+            mesocycles: {
+              ...state.mesocycles,
+              [macrocycleId]: (state.mesocycles[macrocycleId] || []).map((m) =>
+                m.id === mesocycleId ? updated : m
+              ),
+            },
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  deleteMesocycle: async (macrocycleId: string, mesocycleId: string) => {
-    set({ error: null });
-    try {
-      await mesocyclesService.deleteMesocycle(macrocycleId, mesocycleId);
-      set((state) => ({
-        mesocycles: {
-          ...state.mesocycles,
-          [macrocycleId]: (state.mesocycles[macrocycleId] || []).filter((m) => m.id !== mesocycleId),
-        },
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      deleteMesocycle: async (macrocycleId: string, mesocycleId: string) => {
+        set({ error: null });
+        try {
+          await mesocyclesService.deleteMesocycle(macrocycleId, mesocycleId);
+          set((state) => ({
+            mesocycles: {
+              ...state.mesocycles,
+              [macrocycleId]: (state.mesocycles[macrocycleId] || []).filter((m) => m.id !== mesocycleId),
+            },
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  // =============== Microcycles ===============
-  createMicrocycle: async (macrocycleId: string, mesocycleId: string, data: MicrocycleCreateData) => {
-    set({ error: null });
-    try {
-      const microcycle = await mesocyclesService.createMicrocycle(macrocycleId, mesocycleId, data);
-      set((state) => ({
-        microcycles: {
-          ...state.microcycles,
-          [mesocycleId]: [...(state.microcycles[mesocycleId] || []), microcycle],
-        },
-      }));
-      return microcycle;
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      // =============== Microcycles ===============
+      createMicrocycle: async (macrocycleId: string, mesocycleId: string, data: MicrocycleCreateData) => {
+        set({ error: null });
+        try {
+          const microcycle = await mesocyclesService.createMicrocycle(macrocycleId, mesocycleId, data);
+          set((state) => ({
+            microcycles: {
+              ...state.microcycles,
+              [mesocycleId]: [...(state.microcycles[mesocycleId] || []), microcycle],
+            },
+          }));
+          return microcycle;
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  updateMicrocycle: async (macrocycleId: string, mesocycleId: string, microcycleId: string, data: MicrocycleUpdateData) => {
-    set({ error: null });
-    try {
-      const updated = await mesocyclesService.updateMicrocycle(macrocycleId, mesocycleId, microcycleId, data);
-      set((state) => ({
-        microcycles: {
-          ...state.microcycles,
-          [mesocycleId]: (state.microcycles[mesocycleId] || []).map((m) =>
-            m.id === microcycleId ? updated : m
-          ),
-        },
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      updateMicrocycle: async (macrocycleId: string, mesocycleId: string, microcycleId: string, data: MicrocycleUpdateData) => {
+        set({ error: null });
+        try {
+          const updated = await mesocyclesService.updateMicrocycle(macrocycleId, mesocycleId, microcycleId, data);
+          set((state) => ({
+            microcycles: {
+              ...state.microcycles,
+              [mesocycleId]: (state.microcycles[mesocycleId] || []).map((m) =>
+                m.id === microcycleId ? updated : m
+              ),
+            },
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  deleteMicrocycle: async (macrocycleId: string, mesocycleId: string, microcycleId: string) => {
-    set({ error: null });
-    try {
-      await mesocyclesService.deleteMicrocycle(macrocycleId, mesocycleId, microcycleId);
-      set((state) => ({
-        microcycles: {
-          ...state.microcycles,
-          [mesocycleId]: (state.microcycles[mesocycleId] || []).filter((m) => m.id !== microcycleId),
-        },
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      deleteMicrocycle: async (macrocycleId: string, mesocycleId: string, microcycleId: string) => {
+        set({ error: null });
+        try {
+          await mesocyclesService.deleteMicrocycle(macrocycleId, mesocycleId, microcycleId);
+          set((state) => ({
+            microcycles: {
+              ...state.microcycles,
+              [mesocycleId]: (state.microcycles[mesocycleId] || []).filter((m) => m.id !== microcycleId),
+            },
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  // =============== Training Days ===============
-  createTrainingDay: async (macrocycleId: string, mesocycleId: string, microcycleId: string, data: TrainingDayCreateData) => {
-    set({ error: null });
-    try {
-      const day = await mesocyclesService.createTrainingDay(macrocycleId, mesocycleId, microcycleId, data);
-      set((state) => ({
-        trainingDays: {
-          ...state.trainingDays,
-          [microcycleId]: [...(state.trainingDays[microcycleId] || []), day],
-        },
-      }));
-      return day;
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      // =============== Training Days ===============
+      createTrainingDay: async (macrocycleId: string, mesocycleId: string, microcycleId: string, data: TrainingDayCreateData) => {
+        set({ error: null });
+        try {
+          const day = await mesocyclesService.createTrainingDay(macrocycleId, mesocycleId, microcycleId, data);
+          set((state) => ({
+            trainingDays: {
+              ...state.trainingDays,
+              [microcycleId]: [...(state.trainingDays[microcycleId] || []), day],
+            },
+          }));
+          return day;
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  updateTrainingDay: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, data: TrainingDayUpdateData) => {
-    set({ error: null });
-    try {
-      const updated = await mesocyclesService.updateTrainingDay(macrocycleId, mesocycleId, microcycleId, dayId, data);
-      set((state) => ({
-        trainingDays: {
-          ...state.trainingDays,
-          [microcycleId]: (state.trainingDays[microcycleId] || []).map((d) =>
-            d.id === dayId ? updated : d
-          ),
-        },
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      updateTrainingDay: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, data: TrainingDayUpdateData) => {
+        set({ error: null });
+        try {
+          const updated = await mesocyclesService.updateTrainingDay(macrocycleId, mesocycleId, microcycleId, dayId, data);
+          set((state) => ({
+            trainingDays: {
+              ...state.trainingDays,
+              [microcycleId]: (state.trainingDays[microcycleId] || []).map((d) =>
+                d.id === dayId ? updated : d
+              ),
+            },
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  deleteTrainingDay: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string) => {
-    set({ error: null });
-    try {
-      await mesocyclesService.deleteTrainingDay(macrocycleId, mesocycleId, microcycleId, dayId);
-      set((state) => ({
-        trainingDays: {
-          ...state.trainingDays,
-          [microcycleId]: (state.trainingDays[microcycleId] || []).filter((d) => d.id !== dayId),
-        },
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      deleteTrainingDay: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string) => {
+        set({ error: null });
+        try {
+          await mesocyclesService.deleteTrainingDay(macrocycleId, mesocycleId, microcycleId, dayId);
+          set((state) => ({
+            trainingDays: {
+              ...state.trainingDays,
+              [microcycleId]: (state.trainingDays[microcycleId] || []).filter((d) => d.id !== dayId),
+            },
+          }));
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
-  // =============== Day Exercises ===============
-  createDayExercise: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, data: DayExerciseCreateData) => {
-    set({ error: null });
-    try {
-      const exercise = await mesocyclesService.createDayExercise(macrocycleId, mesocycleId, microcycleId, dayId, data);
-      set((state) => {
-        const updatedDayExercises = [...(state.dayExercises[dayId] || []), exercise];
+      // =============== Day Exercises ===============
+      createDayExercise: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, data: DayExerciseCreateData) => {
+        set({ error: null });
+        try {
+          const exercise = await mesocyclesService.createDayExercise(macrocycleId, mesocycleId, microcycleId, dayId, data);
+          set((state) => {
+            const updatedDayExercises = [...(state.dayExercises[dayId] || []), exercise];
 
-        // También actualizar trainingDays para que la UI se actualice
-        const updatedTrainingDays = { ...state.trainingDays };
-        for (const mcId of Object.keys(updatedTrainingDays)) {
-          updatedTrainingDays[mcId] = updatedTrainingDays[mcId].map(day => {
-            if (day.id === dayId) {
-              return { ...day, exercises: updatedDayExercises };
+            // También actualizar trainingDays para que la UI se actualice
+            const updatedTrainingDays = { ...state.trainingDays };
+            for (const mcId of Object.keys(updatedTrainingDays)) {
+              updatedTrainingDays[mcId] = updatedTrainingDays[mcId].map(day => {
+                if (day.id === dayId) {
+                  return { ...day, exercises: updatedDayExercises };
+                }
+                return day;
+              });
             }
-            return day;
+
+            return {
+              dayExercises: {
+                ...state.dayExercises,
+                [dayId]: updatedDayExercises,
+              },
+              trainingDays: updatedTrainingDays,
+            };
           });
+          return exercise;
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
         }
+      },
 
-        return {
-          dayExercises: {
-            ...state.dayExercises,
-            [dayId]: updatedDayExercises,
-          },
-          trainingDays: updatedTrainingDays,
-        };
-      });
-      return exercise;
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      updateDayExercise: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, exerciseId: string, data: DayExerciseUpdateData) => {
+        set({ error: null });
+        try {
+          const updated = await mesocyclesService.updateDayExercise(macrocycleId, mesocycleId, microcycleId, dayId, exerciseId, data);
+          set((state) => {
+            // Actualizar dayExercises
+            const updatedDayExercises = (state.dayExercises[dayId] || []).map((e) =>
+              e.id === exerciseId ? updated : e
+            );
 
-  updateDayExercise: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, exerciseId: string, data: DayExerciseUpdateData) => {
-    set({ error: null });
-    try {
-      const updated = await mesocyclesService.updateDayExercise(macrocycleId, mesocycleId, microcycleId, dayId, exerciseId, data);
-      set((state) => {
-        // Actualizar dayExercises
-        const updatedDayExercises = (state.dayExercises[dayId] || []).map((e) =>
-          e.id === exerciseId ? updated : e
-        );
-
-        // También actualizar trainingDays para que la UI se actualice
-        const updatedTrainingDays = { ...state.trainingDays };
-        for (const mcId of Object.keys(updatedTrainingDays)) {
-          updatedTrainingDays[mcId] = updatedTrainingDays[mcId].map(day => {
-            if (day.id === dayId) {
-              return { ...day, exercises: updatedDayExercises };
+            // También actualizar trainingDays para que la UI se actualice
+            const updatedTrainingDays = { ...state.trainingDays };
+            for (const mcId of Object.keys(updatedTrainingDays)) {
+              updatedTrainingDays[mcId] = updatedTrainingDays[mcId].map(day => {
+                if (day.id === dayId) {
+                  return { ...day, exercises: updatedDayExercises };
+                }
+                return day;
+              });
             }
-            return day;
+
+            return {
+              dayExercises: {
+                ...state.dayExercises,
+                [dayId]: updatedDayExercises,
+              },
+              trainingDays: updatedTrainingDays,
+            };
           });
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
         }
+      },
 
-        return {
-          dayExercises: {
-            ...state.dayExercises,
-            [dayId]: updatedDayExercises,
-          },
-          trainingDays: updatedTrainingDays,
-        };
-      });
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      deleteDayExercise: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, exerciseId: string) => {
+        set({ error: null });
+        try {
+          await mesocyclesService.deleteDayExercise(macrocycleId, mesocycleId, microcycleId, dayId, exerciseId);
+          set((state) => {
+            const updatedDayExercises = (state.dayExercises[dayId] || []).filter((e) => e.id !== exerciseId);
 
-  deleteDayExercise: async (macrocycleId: string, mesocycleId: string, microcycleId: string, dayId: string, exerciseId: string) => {
-    set({ error: null });
-    try {
-      await mesocyclesService.deleteDayExercise(macrocycleId, mesocycleId, microcycleId, dayId, exerciseId);
-      set((state) => {
-        const updatedDayExercises = (state.dayExercises[dayId] || []).filter((e) => e.id !== exerciseId);
-
-        // También actualizar trainingDays para que la UI se actualice
-        const updatedTrainingDays = { ...state.trainingDays };
-        for (const mcId of Object.keys(updatedTrainingDays)) {
-          updatedTrainingDays[mcId] = updatedTrainingDays[mcId].map(day => {
-            if (day.id === dayId) {
-              return { ...day, exercises: updatedDayExercises };
+            // También actualizar trainingDays para que la UI se actualice
+            const updatedTrainingDays = { ...state.trainingDays };
+            for (const mcId of Object.keys(updatedTrainingDays)) {
+              updatedTrainingDays[mcId] = updatedTrainingDays[mcId].map(day => {
+                if (day.id === dayId) {
+                  return { ...day, exercises: updatedDayExercises };
+                }
+                return day;
+              });
             }
-            return day;
+
+            return {
+              dayExercises: {
+                ...state.dayExercises,
+                [dayId]: updatedDayExercises,
+              },
+              trainingDays: updatedTrainingDays,
+            };
           });
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
         }
+      },
 
-        return {
-          dayExercises: {
-            ...state.dayExercises,
-            [dayId]: updatedDayExercises,
-          },
-          trainingDays: updatedTrainingDays,
-        };
-      });
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+      // =============== Exercises ===============
+      loadExercises: async (filters?: any) => {
+        set({ isLoadingExercises: true, error: null });
+        try {
+          // Cargar todos los ejercicios (el backend tiene límite de 100 por defecto)
+          const response = await exercisesService.getAll({ ...filters, limit: 500 });
+          set({ exercises: response.exercises, isLoadingExercises: false });
+        } catch (error: any) {
+          set({ error: error.message, isLoadingExercises: false });
+        }
+      },
 
-  // =============== Exercises ===============
-  loadExercises: async (filters?: any) => {
-    set({ isLoadingExercises: true, error: null });
-    try {
-      // Cargar todos los ejercicios (el backend tiene límite de 100 por defecto)
-      const response = await exercisesService.getAll({ ...filters, limit: 500 });
-      set({ exercises: response.exercises, isLoadingExercises: false });
-    } catch (error: any) {
-      set({ error: error.message, isLoadingExercises: false });
-    }
-  },
+      // =============== Drag and Drop ===============
+      reorderExercises: async (dayId: string, exerciseIds: string[]) => {
+        set({ error: null });
+        try {
+          // Actualización optimista de AMBAS estructuras
+          set((state) => {
+            const dayExercises = state.dayExercises[dayId] || [];
+            const reordered = exerciseIds.map((id, index) => {
+              const exercise = dayExercises.find((e) => e.id === id);
+              return exercise ? { ...exercise, order_index: index } : null;
+            }).filter(Boolean) as DayExercise[];
 
-  // =============== Drag and Drop ===============
-  reorderExercises: async (dayId: string, exerciseIds: string[]) => {
-    set({ error: null });
-    try {
-      // Actualización optimista de AMBAS estructuras
-      set((state) => {
-        const dayExercises = state.dayExercises[dayId] || [];
-        const reordered = exerciseIds.map((id, index) => {
-          const exercise = dayExercises.find((e) => e.id === id);
-          return exercise ? { ...exercise, order_index: index } : null;
-        }).filter(Boolean) as DayExercise[];
-
-        // También actualizar trainingDays para que la UI se actualice
-        const updatedTrainingDays = { ...state.trainingDays };
-        for (const microcycleId of Object.keys(updatedTrainingDays)) {
-          updatedTrainingDays[microcycleId] = updatedTrainingDays[microcycleId].map(day => {
-            if (day.id === dayId) {
-              return { ...day, exercises: reordered };
+            // También actualizar trainingDays para que la UI se actualice
+            const updatedTrainingDays = { ...state.trainingDays };
+            for (const microcycleId of Object.keys(updatedTrainingDays)) {
+              updatedTrainingDays[microcycleId] = updatedTrainingDays[microcycleId].map(day => {
+                if (day.id === dayId) {
+                  return { ...day, exercises: reordered };
+                }
+                return day;
+              });
             }
-            return day;
+
+            return {
+              dayExercises: {
+                ...state.dayExercises,
+                [dayId]: reordered,
+              },
+              trainingDays: updatedTrainingDays,
+            };
           });
+
+          // API call
+          await mesocyclesService.reorderExercises(dayId, exerciseIds);
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
         }
+      },
 
-        return {
-          dayExercises: {
-            ...state.dayExercises,
-            [dayId]: reordered,
-          },
-          trainingDays: updatedTrainingDays,
-        };
-      });
+      moveExerciseBetweenDays: async (
+        exerciseId: string,
+        fromDayId: string,
+        toDayId: string,
+        newIndex: number
+      ) => {
+        set({ error: null });
+        try {
+          // Actualización optimista de AMBAS estructuras
+          set((state) => {
+            const fromExercises = [...(state.dayExercises[fromDayId] || [])];
+            const toExercises = [...(state.dayExercises[toDayId] || [])];
 
-      // API call
-      await mesocyclesService.reorderExercises(dayId, exerciseIds);
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
+            // Find and remove from source
+            const exerciseIndex = fromExercises.findIndex((e) => e.id === exerciseId);
+            if (exerciseIndex === -1) return state;
 
-  moveExerciseBetweenDays: async (
-    exerciseId: string,
-    fromDayId: string,
-    toDayId: string,
-    newIndex: number
-  ) => {
-    set({ error: null });
-    try {
-      // Actualización optimista de AMBAS estructuras
-      set((state) => {
-        const fromExercises = [...(state.dayExercises[fromDayId] || [])];
-        const toExercises = [...(state.dayExercises[toDayId] || [])];
+            const [movedExercise] = fromExercises.splice(exerciseIndex, 1);
 
-        // Find and remove from source
-        const exerciseIndex = fromExercises.findIndex((e) => e.id === exerciseId);
-        if (exerciseIndex === -1) return state;
+            // Add to target
+            const updatedExercise = { ...movedExercise, training_day_id: toDayId, order_index: newIndex };
+            toExercises.splice(newIndex, 0, updatedExercise);
 
-        const [movedExercise] = fromExercises.splice(exerciseIndex, 1);
+            // Reindex both arrays
+            const reindexedFrom = fromExercises.map((e, i) => ({ ...e, order_index: i }));
+            const reindexedTo = toExercises.map((e, i) => ({ ...e, order_index: i }));
 
-        // Add to target
-        const updatedExercise = { ...movedExercise, training_day_id: toDayId, order_index: newIndex };
-        toExercises.splice(newIndex, 0, updatedExercise);
-
-        // Reindex both arrays
-        const reindexedFrom = fromExercises.map((e, i) => ({ ...e, order_index: i }));
-        const reindexedTo = toExercises.map((e, i) => ({ ...e, order_index: i }));
-
-        // También actualizar trainingDays para que la UI se actualice
-        const updatedTrainingDays = { ...state.trainingDays };
-        for (const microcycleId of Object.keys(updatedTrainingDays)) {
-          updatedTrainingDays[microcycleId] = updatedTrainingDays[microcycleId].map(day => {
-            if (day.id === fromDayId) {
-              return { ...day, exercises: reindexedFrom };
+            // También actualizar trainingDays para que la UI se actualice
+            const updatedTrainingDays = { ...state.trainingDays };
+            for (const microcycleId of Object.keys(updatedTrainingDays)) {
+              updatedTrainingDays[microcycleId] = updatedTrainingDays[microcycleId].map(day => {
+                if (day.id === fromDayId) {
+                  return { ...day, exercises: reindexedFrom };
+                }
+                if (day.id === toDayId) {
+                  return { ...day, exercises: reindexedTo };
+                }
+                return day;
+              });
             }
-            if (day.id === toDayId) {
-              return { ...day, exercises: reindexedTo };
-            }
-            return day;
+
+            return {
+              dayExercises: {
+                ...state.dayExercises,
+                [fromDayId]: reindexedFrom,
+                [toDayId]: reindexedTo,
+              },
+              trainingDays: updatedTrainingDays,
+            };
           });
+
+          // API call
+          await mesocyclesService.moveExerciseBetweenDays(exerciseId, fromDayId, toDayId, newIndex);
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
         }
-
-        return {
-          dayExercises: {
-            ...state.dayExercises,
-            [fromDayId]: reindexedFrom,
-            [toDayId]: reindexedTo,
-          },
-          trainingDays: updatedTrainingDays,
-        };
-      });
-
-      // API call
-      await mesocyclesService.moveExerciseBetweenDays(exerciseId, fromDayId, toDayId, newIndex);
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-}));
+      },
+    }),
+    { name: 'MesocycleStore' }
+  )
+);

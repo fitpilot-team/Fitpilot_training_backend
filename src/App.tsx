@@ -1,7 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
-import { LoginPage } from './pages/LoginPage';
+import { LoginPage } from './pages/auth/LoginPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ExercisesPage } from './pages/ExercisesPage';
 import { TrainingTemplatesPage } from './pages/TrainingTemplatesPage';
@@ -20,9 +21,12 @@ import {
 import { NotFoundPage } from './pages/NotFoundPage';
 import { NutritionClientsPage } from './pages/nutrition/NutritionClientsPage';
 import { NutritionDashboardPage } from './pages/nutrition/NutritionDashboardPage';
+import { NutritionAgendaPage } from './pages/nutrition/NutritionAgendaPage';
 import { NutritionLayout } from './components/layout/NutritionLayout';
 import { NutritionClientDetailPage } from './pages/nutrition/NutritionClientDetailPage';
-
+import { NutritionConsultationPage } from './pages/nutrition/NutritionConsultationPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { AuthLayout } from './components/layout/AuthLayout';
 
 // Example of how to import a specific remote module:
 // const RemoteDashboard = React.lazy(() => import('dashboard/App'));
@@ -59,7 +63,16 @@ function App() {
 
       <Routes>
         {/* Public Routes */}
-        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/auth"
+          element={<AuthLayout />}
+        >
+
+
+          <Route path="login" element={<LoginPage />} />
+          <Route path="register" element={<RegisterPage />} />
+          {/* <Route path="forgot-password" element={<ForgotPasswordPage />} /> */}
+        </Route>
 
         {/* Protected Routes */}
         <Route
@@ -162,6 +175,17 @@ function App() {
         />
 
         <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <ProfilePage />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/ai-generator"
           element={
             <ProtectedRoute>
@@ -184,9 +208,11 @@ function App() {
             </ProtectedRoute>
           }
         >
-           <Route index element={<NutritionDashboardPage />} />
-           <Route path="clients" element={<NutritionClientsPage />} />
-           <Route path="clients/:clientId" element={<NutritionClientDetailPage />} />
+          <Route index element={<NutritionDashboardPage />} />
+          <Route path="agenda" element={<NutritionAgendaPage />} />
+          <Route path="clients" element={<NutritionClientsPage />} />
+          <Route path="clients/:clientId" element={<NutritionClientDetailPage />} />
+          <Route path="consultation/:id" element={<NutritionConsultationPage />} />
         </Route>
 
         {/* Catch all - 404 */}

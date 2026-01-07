@@ -27,6 +27,24 @@ export interface LoginResponse {
   token_type: string;
 }
 
+export interface JWTPayload {
+  sub: string;
+  email: string;
+  role: string;
+  professional_role?: string[];
+  exp: number;
+  iat: number;
+  [key: string]: any;
+}
+
+export interface ProfessionalContextType {
+  professional: JWTPayload | null;
+  userData: User | null;
+  isLoading: boolean;
+  error: string | null;
+  refreshProfessional: () => Promise<void>;
+}
+
 export interface RegisterRequest {
   email: string;
   password: string;
