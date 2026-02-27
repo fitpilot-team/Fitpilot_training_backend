@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { TFunction } from 'i18next';
 import { Microcycle, TrainingDay, Exercise, DayExercise, MuscleName } from '../types';
 import logoImage from '../assets/fitpilot-logo.png';
-import { getExerciseName } from './exerciseHelpers';
+import { getExerciseName, resolveExerciseMediaUrl } from './exerciseHelpers';
 import {
     calculateMicrocycleMetrics,
     getStressLevel,
@@ -418,7 +418,7 @@ export const generateMicrocyclePDF = async (
             const thumbnailPromises = exercisesList.map(async (dayEx) => {
                 const exercise = dayEx.exercise || exercises.find(e => e.id === dayEx.exercise_id);
                 // Priority: custom image > thumbnail from ExerciseDB
-                const thumbnailUrl = exercise?.image_url || exercise?.thumbnail_url;
+                const thumbnailUrl = resolveExerciseMediaUrl(exercise?.image_url || exercise?.thumbnail_url);
                 if (thumbnailUrl) {
                     return await loadImageAsBase64(thumbnailUrl);
                 }

@@ -4,7 +4,7 @@ import {
   TrashIcon,
   PhotoIcon
 } from '@heroicons/react/24/outline';
-import { getExerciseName } from '../../utils/exerciseHelpers';
+import { getExerciseImageUrl, getExerciseName } from '../../utils/exerciseHelpers';
 
 interface ExerciseCardProps {
   exercise: Exercise;
@@ -41,13 +41,10 @@ const difficultyLabels: Record<string, { label: string; color: string }> = {
 
 export function ExerciseCard({ exercise, onEdit, onDelete, canModify = false }: ExerciseCardProps) {
   // Priority: custom image > thumbnail from ExerciseDB > placeholder
-  // Images are served through nginx proxy at /static -> backend:8000/static
   const baseImageSrc = exercise.image_url || exercise.thumbnail_url || null;
 
   // Add cache-busting parameter to force image reload when updated
-  const imageSrc = baseImageSrc
-    ? `${baseImageSrc}${baseImageSrc.includes('?') ? '&' : '?'}t=${exercise.updated_at || Date.now()}`
-    : null;
+  const imageSrc = getExerciseImageUrl(baseImageSrc, exercise.updated_at);
 
   // Get translated exercise name
   const exerciseName = getExerciseName(exercise);

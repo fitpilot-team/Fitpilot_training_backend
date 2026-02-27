@@ -6,7 +6,7 @@ import { Input } from '../common/Input';
 import { TrashIcon, QuestionMarkCircleIcon, HeartIcon } from '@heroicons/react/24/outline';
 import { TEMPO_OPTIONS, SET_TYPE_OPTIONS } from '../../constants/exerciseConfig';
 import type { DayExercise, Exercise, SetType, ExercisePhase } from '../../types';
-import { getExerciseName, getExerciseDescription } from '../../utils/exerciseHelpers';
+import { getExerciseName, getExerciseDescription, getExerciseImageUrl } from '../../utils/exerciseHelpers';
 
 interface ExerciseConfigModalProps {
   isOpen: boolean;
@@ -261,13 +261,13 @@ export function ExerciseConfigModal({
           {/* Anatomy image takes priority for program design context */}
           {exercise.anatomy_image_url ? (
             <img
-              src={exercise.anatomy_image_url}
+              src={getExerciseImageUrl(exercise.anatomy_image_url, exercise.updated_at) ?? undefined}
               alt={t('training:configModal.anatomyOf', { name: exerciseName })}
               className="w-40 h-40 object-contain rounded-lg bg-white border border-gray-200 shadow-sm flex-shrink-0"
             />
           ) : exercise.thumbnail_url || exercise.image_url ? (
             <img
-              src={exercise.image_url || exercise.thumbnail_url || ''}
+              src={getExerciseImageUrl(exercise.image_url || exercise.thumbnail_url, exercise.updated_at) ?? undefined}
               alt={exerciseName}
               className="w-36 h-36 object-cover rounded-lg flex-shrink-0"
             />

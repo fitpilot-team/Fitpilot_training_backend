@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { resolveExerciseMediaUrl } from '../../utils/exerciseHelpers';
 
 interface ImageUploadProps {
   currentImageUrl?: string | null;
@@ -24,8 +25,7 @@ export function ImageUpload({
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  // Images are served through nginx proxy at /static -> backend:8000/static
-  const displayUrl = previewUrl || currentImageUrl || null;
+  const displayUrl = previewUrl || resolveExerciseMediaUrl(currentImageUrl) || null;
 
   const validateFile = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type)) {

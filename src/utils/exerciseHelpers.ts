@@ -6,6 +6,31 @@
 import type { DayExercise, Exercise } from '../types';
 import i18n from '../i18n';
 
+const getTrainingBaseUrl = (): string => {
+  const configured = import.meta.env.VITE_TRAINING_API_URL as string | undefined;
+  return configured ? configured.replace(/\/+$/, '') : '';
+};
+
+/**
+ * Resolve exercise media URLs from either:
+ * - absolute URLs (R2/CDN or external) -> unchanged
+ * - legacy relative /static URLs -> prefixed with training API origin
+ */
+export function resolveExerciseMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  if (/^https?:\/\//i.test(url) || url.startsWith('//')) {
+    return url;
+  }
+
+  if (url.startsWith('/static/')) {
+    const base = getTrainingBaseUrl();
+    return base ? `${base}${url}` : url;
+  }
+
+  return url;
+}
+
 /**
  * Get image URL with cache-busting timestamp
  * Used in KanbanExerciseCard, ExerciseCard, etc.
@@ -14,9 +39,10 @@ export function getExerciseImageUrl(
   url: string | null | undefined,
   updatedAt?: string | Date | number
 ): string | null {
-  if (!url) return null;
+  const resolvedUrl = resolveExerciseMediaUrl(url);
+  if (!resolvedUrl) return null;
   const timestamp = updatedAt ? new Date(updatedAt).getTime() : Date.now();
-  return `${url}${url.includes('?') ? '&' : '?'}t=${timestamp}`;
+  return `${resolvedUrl}${resolvedUrl.includes('?') ? '&' : '?'}t=${timestamp}`;
 }
 
 /**

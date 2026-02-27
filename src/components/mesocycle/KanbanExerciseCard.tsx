@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Bars3Icon, ClockIcon } from '@heroicons/react/24/outline';
 import type { DayExercise, Exercise } from '../../types';
 import { getMuscleStyle } from '../../utils/muscleGroupStyles';
-import { getExerciseName } from '../../utils/exerciseHelpers';
+import { getExerciseImageUrl, getExerciseName } from '../../utils/exerciseHelpers';
 
 interface KanbanExerciseCardProps {
   dayExercise: DayExercise;
@@ -71,9 +71,7 @@ export function KanbanExerciseCard({
   const muscleStyle = getMuscleStyle(primaryMuscle);
 
   const getImageSrc = (url: string | null | undefined) => {
-    if (!url) return null;
-    const timestamp = exerciseData?.updated_at || Date.now();
-    return `${url}${url.includes('?') ? '&' : '?'}t=${timestamp}`;
+    return getExerciseImageUrl(url, exerciseData?.updated_at);
   };
 
   const formatConfig = () => {
@@ -270,9 +268,7 @@ export function LibraryExerciseCard({ exercise }: LibraryExerciseCardProps) {
   const muscleStyle = getMuscleStyle(primaryMuscle);
 
   const getImageSrc = (url: string | null | undefined) => {
-    if (!url) return null;
-    const timestamp = exercise.updated_at || Date.now();
-    return `${url}${url.includes('?') ? '&' : '?'}t=${timestamp}`;
+    return getExerciseImageUrl(url, exercise.updated_at);
   };
 
   return (
@@ -346,9 +342,7 @@ export function LibraryExerciseCardOverlay({ exercise }: { exercise: Exercise })
   const muscleStyle = getMuscleStyle(primaryMuscle);
 
   const getImageSrc = (url: string | null | undefined) => {
-    if (!url) return null;
-    const timestamp = exercise.updated_at || Date.now();
-    return `${url}${url.includes('?') ? '&' : '?'}t=${timestamp}`;
+    return getExerciseImageUrl(url, exercise.updated_at);
   };
 
   return (
