@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Clock,
@@ -71,14 +71,6 @@ export function NutritionConsultationPage() {
         .filter(a => a.id !== appointment?.id && new Date(a.scheduled_at) > new Date())
         .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
-    const lastSession = pastAppointments[0];
-    const lastSessionDate = lastSession ? (() => {
-        const days = differenceInDays(new Date(), new Date(lastSession.scheduled_at));
-        if (days === 0) return 'Hoy';
-        if (days === 1) return 'Ayer';
-        return `Hace ${days} días`;
-    })() : 'Primera Sesión';
-
     const [seconds, setSeconds] = useState(0);
     const [isActive, setIsActive] = useState(true);
     // Notes Sections State
@@ -94,7 +86,7 @@ export function NutritionConsultationPage() {
     const [showEndConfirmation, setShowEndConfirmation] = useState(false);
 
     const [showHistoryModal, setShowHistoryModal] = useState(false);
-    const [historyViewed, setHistoryViewed] = useState(false);
+    const [historyViewed] = useState(false);
     const [completedSteps, setCompletedSteps] = useState({
         measurements: false,
         progress: false,
@@ -336,7 +328,7 @@ export function NutritionConsultationPage() {
     }, [appointment?.id, appointment?.start_date]);
 
     // Draft Retrieval and Creation Logic
-    const { data: existingDraft, isLoading: isLoadingDraft, isError: isDraftError } = useGetAppointmentDraft(Number(id));
+    const { data: existingDraft, isLoading: isLoadingDraft } = useGetAppointmentDraft(Number(id));
 
     // Populate form with existing draft data
     useEffect(() => {

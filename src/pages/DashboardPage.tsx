@@ -1,10 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { Card } from '../components/common/Card';
-import { useAuthStore } from '@/store/newAuthStore';
 import {
   BeakerIcon,
   CalendarDaysIcon,
-  UsersIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline';
 

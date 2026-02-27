@@ -3,11 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { ExerciseCard, ExerciseFilters, ExerciseModal, FilterState } from '../components/exercises';
+import { ExerciseFilters, ExerciseModal, FilterState } from '../components/exercises';
 import { exercisesService } from '../services/exercises';
-import { useAuthStore } from '@/store/newAuthStore';
 import { Exercise } from '../types';
-import { PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 const initialFilters: FilterState = {
   search: '',
@@ -27,7 +26,7 @@ export function ExercisesPage() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const selectedExercise: Exercise | null = null;
   const [deleteConfirm, setDeleteConfirm] = useState<Exercise | null>(null);
 
   // const { user } = useAuthStore();
@@ -71,20 +70,6 @@ export function ExercisesPage() {
 
   const handleClearFilters = () => {
     setFilters(initialFilters);
-  };
-
-  const handleAddExercise = () => {
-    setSelectedExercise(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEditExercise = (exercise: Exercise) => {
-    setSelectedExercise(exercise);
-    setIsModalOpen(true);
-  };
-
-  const handleDeleteClick = (exercise: Exercise) => {
-    setDeleteConfirm(exercise);
   };
 
   const handleDeleteConfirm = async () => {

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, ChefHat, Flame, Scale, Clock, ChevronRight, Edit2, LayoutTemplate, Trash2 } from 'lucide-react';
+import { Copy, ChefHat, Flame, Scale, Clock, ChevronRight, LayoutTemplate, Trash2 } from 'lucide-react';
 import { useGetMenus, useUpdateMenu } from '@/features/menus/queries';
-import { IMenu, IMenuItem } from '@/features/menus/types';
+import { IMenu } from '@/features/menus/types';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '@/components/common/Modal';
 import { useProfessional } from '@/contexts/ProfessionalContext';

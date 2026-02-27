@@ -1,5 +1,5 @@
 import React from 'react';
-import { Appointment } from '@/features/client-history/types';
+import { IAppointment as Appointment } from '@/features/appointments/types';
 import { FileText, Calendar, Clock, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

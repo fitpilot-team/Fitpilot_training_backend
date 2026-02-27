@@ -1463,7 +1463,6 @@ onSelect={async (recipeId) => {
 
                                             const handleUpdateSelection = (idx: number, updates: Partial<IFoodSelection>, food?: IFoodItem) => {
                                                 const newSelections = [...currentSelections];
-                                                const group = groupsMap[ex.exchange_group_id];
                                                 const current = newSelections[idx] || { grams: 0, calculatedExchanges: 0 };
 
                                                 const targetFood = food || current._foodRef;
@@ -1549,11 +1548,9 @@ onSelect={async (recipeId) => {
                                                                         excludeIds={currentSelections.map((s, sIdx) => sIdx !== idx ? s.foodId : null).filter(Boolean) as number[]}
                                                                         autoOpen={currentSelections[idx]?.shouldAutoOpen}
                                                                         onChange={(food) => {
-                                                                            const avgCal = groupsMap[ex.exchange_group_id]?.avg_calories || 1;
                                                                             // Default to first nutrition value
                                                                             const nutritionValue = food.food_nutrition_values?.find(nv => nv.id === currentSelections[idx]?.nutritionValueId) || food.food_nutrition_values?.[0];
 
-                                                                            const foodCal = parseFloat(String(nutritionValue?.calories_kcal)) || 0;
                                                                             const baseSize = parseFloat(String(nutritionValue?.base_serving_size)) || 1;
 
                                                                             // Default to 1 full exchange worth of grams (using baseSize as 1 equivalent)

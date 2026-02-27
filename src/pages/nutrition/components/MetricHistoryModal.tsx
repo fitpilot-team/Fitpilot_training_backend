@@ -1,7 +1,6 @@
 
 import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { ClientMetric } from '@/services/client-metrics';
 import { format } from 'date-fns';
@@ -19,7 +18,8 @@ interface MetricHistoryModalProps {
 
 export function MetricHistoryModal({ isOpen, onClose, title, metrics, unit, tabs, series }: MetricHistoryModalProps) {
     const [hoveredDate, setHoveredDate] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState(tabs ? tabs[0].metricType : null);
+    const [activeTab] = useState(tabs ? tabs[0].metricType : null);
+    void title;
 
     // Prepare data based on mode (Series vs Single/Tabs)
     let processedData: any[] = [];

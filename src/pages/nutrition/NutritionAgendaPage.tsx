@@ -50,6 +50,7 @@ interface Appointment {
     clientAvatar: string;
     date: Date;
     time: string;
+    type: 'NUTRITION' | 'TRAINING' | 'BOTH';
     effectiveDuration?: number;
 }
 
@@ -147,9 +148,9 @@ export function NutritionAgendaPage() {
             clientAvatar: client?.profile_picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(client?.name || 'U')}&background=random`,
             date: scheduledDate,
             time: format(scheduledDate, 'HH:mm'),
-            type: apiApp.type,
+            type: apiApp.type || 'NUTRITION',
             effectiveDuration: apiApp.effective_duration
-        } as any;
+        };
     });
 
     const resetModal = () => {
