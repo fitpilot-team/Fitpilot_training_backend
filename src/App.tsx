@@ -3,7 +3,6 @@ import { Toaster } from 'react-hot-toast';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
-import { DashboardPage } from './pages/DashboardPage';
 import { ExercisesPage } from './pages/ExercisesPage';
 import { TrainingTemplatesPage } from './pages/TrainingTemplatesPage';
 import { MesocycleEditorPage } from './pages/MesocycleEditorPage';
@@ -91,7 +90,7 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <DashboardPage />
+                <NutritionDashboardPage />
               </MainLayout>
             </ProtectedRoute>
           }
@@ -204,7 +203,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<NutritionDashboardPage />} />
+          <Route index element={<Navigate to="/" replace />} />
           <Route path="agenda" element={<NutritionAgendaPage />} />
           <Route path="clients" element={<NutritionClientsPage />} />
           <Route path="clients/new" element={<RegisterClientPage />} />

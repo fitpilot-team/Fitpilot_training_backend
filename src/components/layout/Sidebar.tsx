@@ -24,13 +24,13 @@ interface NavItem {
 }
 
 const trainingConfig: NavItem[] = [
-  { nameKey: 'dashboard', href: '/', icon: HomeIcon },
+  // { nameKey: 'dashboard', href: '/', icon: HomeIcon },
   { nameKey: 'exercises', href: '/training/exercises', icon: BeakerIcon },
   { nameKey: 'templates', href: '/training/programs', icon: DocumentDuplicateIcon },
 ];
 
 const nutritionPrimaryItems: NavItem[] = [
-  { nameKey: 'dashboard', href: '/nutrition', icon: HomeIcon },
+  { nameKey: 'dashboard', href: '/', icon: HomeIcon },
   { nameKey: 'agenda', href: '/nutrition/agenda', icon: Calendar },
   { nameKey: 'nutritionClients', href: '/nutrition/clients', icon: UsersIcon },
 ];
@@ -225,7 +225,7 @@ export function Sidebar() {
               item={item}
               isExpanded={isExpanded}
               locationPath={location.pathname}
-              theme="emerald"
+              theme="blue"
               t={t}
               layoutId="active-nutrition-primary"
             />

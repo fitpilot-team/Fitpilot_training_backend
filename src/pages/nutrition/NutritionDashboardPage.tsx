@@ -19,11 +19,18 @@ import {
     Dumbbell
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import {
+    BeakerIcon,
+    CalendarDaysIcon,
+    ChartBarIcon,
+} from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/newAuthStore';
 import { useProfessionalClients } from '@/features/professional-clients/queries';
 import { useProfessional } from '@/contexts/ProfessionalContext';
 import { useGetAppointments } from '@/features/appointments/queries';
 import { DraftsSection } from './components/DraftsSection';
+import { Card } from '@/components/common/Card';
 
 interface Appointment {
     id: number;
@@ -39,6 +46,7 @@ interface Appointment {
 
 export function NutritionDashboardPage() {
     const navigate = useNavigate();
+    const { t } = useTranslation('common');
     const { user } = useAuthStore();
     const { professional } = useProfessional();
 
@@ -137,6 +145,67 @@ export function NutritionDashboardPage() {
                         </div>
                     </motion.div>
                 ))}
+            </div>
+
+            {/* Training Summary moved from training dashboard */}
+            <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[
+                        {
+                            key: 'totalExercises',
+                            value: '32',
+                            icon: BeakerIcon,
+                            color: 'bg-blue-500',
+                        },
+                        {
+                            key: 'activeMesocycles',
+                            value: '2',
+                            icon: CalendarDaysIcon,
+                            color: 'bg-green-500',
+                        },
+                        {
+                            key: 'completionRate',
+                            value: '87%',
+                            icon: ChartBarIcon,
+                            color: 'bg-yellow-500',
+                        },
+                    ].map((stat) => {
+                        const Icon = stat.icon;
+                        return (
+                            <Card key={stat.key} padding="md">
+                                <div className="flex items-center">
+                                    <div className={`${stat.color} p-3 rounded-lg`}>
+                                        <Icon className="h-6 w-6 text-white" />
+                                    </div>
+                                    <div className="ml-4">
+                                        <p className="text-sm font-medium text-gray-600">{t(`dashboard.stats.${stat.key}`)}</p>
+                                        <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                                    </div>
+                                </div>
+                            </Card>
+                        );
+                    })}
+                </div>
+
+                <Card>
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">{t('dashboard.quickActions')}</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                            onClick={() => navigate('/training/exercises')}
+                            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center"
+                        >
+                            <BeakerIcon className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                            <p className="font-medium text-gray-700">{t('dashboard.browseExercises')}</p>
+                        </button>
+                        <button
+                            onClick={() => navigate('/training/programs/new')}
+                            className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-center"
+                        >
+                            <CalendarDaysIcon className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                            <p className="font-medium text-gray-700">{t('dashboard.createMesocycle')}</p>
+                        </button>
+                    </div>
+                </Card>
             </div>
 
 

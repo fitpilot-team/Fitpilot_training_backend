@@ -615,7 +615,7 @@ export function NutritionConsultationPage() {
                 <div className="text-center">
                     <p className="text-gray-900 font-bold text-xl mb-4">Sesión no encontrada</p>
                     <button
-                        onClick={() => navigate('/nutrition')}
+                        onClick={() => navigate('/')}
                         className="px-6 py-2 bg-nutrition-600 text-white rounded-xl shadow-lg"
                     >
                         Volver al Dashboard
