@@ -13,14 +13,14 @@ from core.dependencies import get_current_user
 
 
 class MoveExerciseRequest(BaseModel):
-    from_day_id: str
-    to_day_id: str
+    from_day_id: int
+    to_day_id: int
     new_index: int
 
 router = APIRouter()
 
 
-def verify_training_day_access(db: Session, training_day_id: str, current_user: User):
+def verify_training_day_access(db: Session, training_day_id: int, current_user: User):
     """Verify user has access to the training day through its parent macrocycle"""
     training_day = db.query(TrainingDay).filter(TrainingDay.id == training_day_id).first()
 
@@ -56,7 +56,7 @@ def verify_training_day_access(db: Session, training_day_id: str, current_user: 
 
 @router.get("/training-day/{training_day_id}", response_model=list[DayExerciseResponse])
 def list_day_exercises_by_training_day(
-    training_day_id: str,
+    training_day_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -76,7 +76,7 @@ def list_day_exercises_by_training_day(
 
 @router.get("/{day_exercise_id}", response_model=DayExerciseResponse)
 def get_day_exercise(
-    day_exercise_id: str,
+    day_exercise_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -97,7 +97,7 @@ def get_day_exercise(
 
 @router.post("/training-day/{training_day_id}", response_model=DayExerciseResponse, status_code=status.HTTP_201_CREATED)
 def create_day_exercise(
-    training_day_id: str,
+    training_day_id: int,
     day_exercise_data: DayExerciseCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -144,7 +144,7 @@ def create_day_exercise(
 
 @router.put("/{day_exercise_id}", response_model=DayExerciseResponse)
 def update_day_exercise(
-    day_exercise_id: str,
+    day_exercise_id: int,
     day_exercise_data: DayExerciseUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -193,7 +193,7 @@ def update_day_exercise(
 
 @router.delete("/{day_exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_day_exercise(
-    day_exercise_id: str,
+    day_exercise_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -227,8 +227,8 @@ def delete_day_exercise(
 
 @router.post("/training-day/{training_day_id}/reorder", response_model=List[DayExerciseResponse])
 def reorder_exercises(
-    training_day_id: str,
-    exercise_order: List[str],
+    training_day_id: int,
+    exercise_order: List[int],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -287,7 +287,7 @@ def reorder_exercises(
 
 @router.post("/{day_exercise_id}/duplicate", response_model=DayExerciseResponse, status_code=status.HTTP_201_CREATED)
 def duplicate_day_exercise(
-    day_exercise_id: str,
+    day_exercise_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -349,7 +349,7 @@ def duplicate_day_exercise(
 
 @router.patch("/{day_exercise_id}/move", response_model=DayExerciseResponse)
 def move_exercise_between_days(
-    day_exercise_id: str,
+    day_exercise_id: int,
     request: MoveExerciseRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

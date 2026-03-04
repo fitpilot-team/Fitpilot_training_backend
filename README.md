@@ -3,13 +3,28 @@
 ## Auth compatibility (Nutrition -> Training)
 
 Training endpoints accept:
-- Local JWT (signed with `SECRET_KEY`)
-- Nutrition JWT fallback via `NUTRITION_API_URL + NUTRITION_AUTH_ME_PATH` (`/v1/auth/me`)
+- Nutrition JWT via `NUTRITION_API_URL + NUTRITION_AUTH_ME_PATH` (`/v1/auth/me`)
+
+`/api/auth/login` is intentionally deprecated for operational use. Authenticate against Nutrition API and reuse that Bearer token for Training API.
 
 Role mapping used for authorization:
 - `ADMIN` / `admin` -> `admin`
-- `PROFESSIONAL` / `trainer` / `coach` -> `trainer`
+- `PROFESSIONAL` + `public.user_professional_roles` contains `TRAINER` -> `trainer`
 - `CLIENT` / `patient` -> `client`
+
+## Shared DB schema upgrade
+
+To align `training.*` with API contract on Supabase shared DB, run:
+
+```bash
+python scripts/upgrade_training_schema_shared_db.py --dry-run --dsn "$TARGET_DSN"
+python scripts/upgrade_training_schema_shared_db.py --apply --dsn "$TARGET_DSN"
+```
+
+The upgrade is idempotent and covers:
+- missing columns for exercises/programs payload compatibility
+- enum normalization to lowercase where required by frontend contract
+- ID sequence/default setup for insert paths
 
 ## Exercise media storage providers
 

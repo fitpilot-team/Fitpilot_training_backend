@@ -1,7 +1,7 @@
 """
 Pydantic schemas for Muscle and ExerciseMuscle.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import Optional, List, Literal
 from enum import Enum
@@ -52,12 +52,11 @@ class MuscleCreate(MuscleBase):
 
 class MuscleResponse(MuscleBase):
     """Schema for Muscle response."""
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class MuscleListResponse(BaseModel):
@@ -68,14 +67,13 @@ class MuscleListResponse(BaseModel):
 
 class MuscleSimple(BaseModel):
     """Simplified Muscle schema for embedding in Exercise responses."""
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     name: str
     display_name_es: str
     display_name_en: str
     muscle_category: str
-
-    class Config:
-        from_attributes = True
 
 
 # ============================================================================
@@ -90,14 +88,13 @@ class ExerciseMuscleInput(BaseModel):
 
 class ExerciseMuscleResponse(BaseModel):
     """Response schema for exercise-muscle relationships."""
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     muscle_id: str
     muscle_name: str
     muscle_display_name: str
     muscle_category: str
     role: str
-
-    class Config:
-        from_attributes = True
 
 
 class ExerciseMuscleCreate(BaseModel):

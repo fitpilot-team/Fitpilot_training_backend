@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from core.config import settings
-from api.routers import auth, exercises, muscles, mesocycles, microcycles, training_days, day_exercises, ai_generator, clients, client_interviews, client_metrics, translation, workout_logs, patient_context
+from api.routers import auth, exercises, muscles, mesocycles, microcycles, training_days, day_exercises, ai_generator, translation, workout_logs
 
 app = FastAPI(
     title="FitPilot API",
@@ -44,12 +44,6 @@ app.include_router(day_exercises.router, prefix="/api/day-exercises", tags=["Day
 
 # AI Generator
 app.include_router(ai_generator.router, prefix="/api/ai", tags=["AI Generator"])
-
-# Clients
-app.include_router(clients.router, prefix="/api/clients", tags=["Clients"])
-app.include_router(client_interviews.router, prefix="/api/client-interviews", tags=["Client Interviews"])
-app.include_router(client_metrics.router, prefix="/api/client-metrics", tags=["Client Metrics"])
-app.include_router(patient_context.router, prefix="/api", tags=["Patient Context"])
 
 # Translation (Ollama/Llama)
 app.include_router(translation.router, prefix="/api/translation", tags=["Translation"])

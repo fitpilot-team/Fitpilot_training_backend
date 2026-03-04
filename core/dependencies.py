@@ -2,8 +2,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from models.base import get_db
-from models.user import User
-from core.security import decode_access_token, introspect_nutrition_token, normalize_auth_role
+from models.user import ProfessionalRole, User
+from core.config import settings
+from core.security import introspect_nutrition_token, normalize_auth_role
 
 security = HTTPBearer()
 
@@ -29,7 +30,12 @@ def _resolve_user(db: Session, user_id: str | None, email: str | None) -> User |
     user = None
 
     if user_id:
-        user = db.query(User).filter(User.id == str(user_id)).first()
+        try:
+            parsed_id = int(str(user_id))
+        except (TypeError, ValueError):
+            parsed_id = None
+        if parsed_id is not None:
+            user = db.query(User).filter(User.id == parsed_id).first()
 
     if user is None and email:
         user = db.query(User).filter(User.email.ilike(str(email))).first()
@@ -48,14 +54,26 @@ def get_effective_user_role(user: User) -> str:
 
     db_role = getattr(user.role, "value", user.role)
     normalized = normalize_auth_role(str(db_role))
+
+    if normalized == "trainer" and not _has_trainer_professional_role(user):
+        return "client"
+
     return normalized or str(db_role).lower()
+
+
+def _has_trainer_professional_role(user: User) -> bool:
+    for role_item in user.professional_roles or []:
+        role_value = getattr(role_item.role, "value", role_item.role)
+        if str(role_value).upper() == ProfessionalRole.TRAINER.value:
+            return True
+    return False
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """Get the current authenticated user"""
+    """Get the current authenticated user (Nutrition token introspection only)."""
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,19 +81,19 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    if not settings.NUTRITION_API_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="NUTRITION_API_URL is required for training auth",
+        )
+
     token = credentials.credentials
-    local_payload = decode_access_token(token)
-    user_id, email, token_role = _extract_identity(local_payload)
+    nutrition_payload = introspect_nutrition_token(token)
+    if nutrition_payload is None:
+        raise credentials_exception
 
+    user_id, email, token_role = _extract_identity(nutrition_payload)
     user = _resolve_user(db, user_id, email)
-
-    # Fallback path: validate token against Nutrition API and resolve by sub/email
-    if user is None:
-        nutrition_payload = introspect_nutrition_token(token)
-        if nutrition_payload:
-            user_id, email, nutrition_role = _extract_identity(nutrition_payload)
-            token_role = nutrition_role or token_role
-            user = _resolve_user(db, user_id, email)
 
     if user is None:
         raise credentials_exception
@@ -107,6 +125,13 @@ def require_trainer(current_user: User = Depends(get_current_user)) -> User:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This action requires trainer privileges"
         )
+
+    if effective_role == "trainer" and not _has_trainer_professional_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Professional role TRAINER is required",
+        )
+
     return current_user
 
 

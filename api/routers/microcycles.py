@@ -12,7 +12,7 @@ from core.dependencies import get_current_user
 router = APIRouter()
 
 
-def verify_macrocycle_access(db: Session, macrocycle_id: str, current_user: User):
+def verify_macrocycle_access(db: Session, macrocycle_id: int, current_user: User):
     """Verify user has access to the macrocycle"""
     macrocycle = db.query(Macrocycle).filter(Macrocycle.id == macrocycle_id).first()
 
@@ -39,7 +39,7 @@ def verify_macrocycle_access(db: Session, macrocycle_id: str, current_user: User
 
 @router.get("/macrocycle/{macrocycle_id}", response_model=list[MicrocycleResponse])
 def list_microcycles_by_macrocycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -57,7 +57,7 @@ def list_microcycles_by_macrocycle(
 
 @router.get("/{microcycle_id}", response_model=MicrocycleResponse)
 def get_microcycle(
-    microcycle_id: str,
+    microcycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -78,7 +78,7 @@ def get_microcycle(
 
 @router.post("/macrocycle/{macrocycle_id}", response_model=MicrocycleResponse, status_code=status.HTTP_201_CREATED)
 def create_microcycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     microcycle_data: MicrocycleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -133,7 +133,7 @@ def create_microcycle(
 
 @router.put("/{microcycle_id}", response_model=MicrocycleResponse)
 def update_microcycle(
-    microcycle_id: str,
+    microcycle_id: int,
     microcycle_data: MicrocycleUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -173,7 +173,7 @@ def update_microcycle(
 
 @router.delete("/{microcycle_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_microcycle(
-    microcycle_id: str,
+    microcycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

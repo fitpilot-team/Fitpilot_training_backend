@@ -15,12 +15,12 @@ from services.metrics_calculator import MuscleVolumeResponse, calculate_muscle_v
 
 
 class ReorderRequest(BaseModel):
-    exercise_ids: List[str]
+    exercise_ids: List[int]
 
 router = APIRouter()
 
 
-def verify_microcycle_access(db: Session, microcycle_id: str, current_user: User):
+def verify_microcycle_access(db: Session, microcycle_id: int, current_user: User):
     """Verify user has access to the microcycle through its parent macrocycle"""
     microcycle = db.query(Microcycle).filter(Microcycle.id == microcycle_id).first()
 
@@ -53,7 +53,7 @@ def verify_microcycle_access(db: Session, microcycle_id: str, current_user: User
 
 @router.get("/microcycle/{microcycle_id}", response_model=list[TrainingDayResponse])
 def list_training_days_by_microcycle(
-    microcycle_id: str,
+    microcycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -71,7 +71,7 @@ def list_training_days_by_microcycle(
 
 @router.get("/{training_day_id}/muscle-volume", response_model=MuscleVolumeResponse)
 def get_muscle_volume(
-    training_day_id: str,
+    training_day_id: int,
     count_secondary: bool = Query(True, description="Count secondary muscles with 0.5x multiplier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -122,7 +122,7 @@ def get_muscle_volume(
 
 @router.get("/{training_day_id}", response_model=TrainingDayResponse)
 def get_training_day(
-    training_day_id: str,
+    training_day_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -143,7 +143,7 @@ def get_training_day(
 
 @router.post("/microcycle/{microcycle_id}", response_model=TrainingDayResponse, status_code=status.HTTP_201_CREATED)
 def create_training_day(
-    microcycle_id: str,
+    microcycle_id: int,
     training_day_data: TrainingDayCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -188,7 +188,7 @@ def create_training_day(
 
 @router.put("/{training_day_id}", response_model=TrainingDayResponse)
 def update_training_day(
-    training_day_id: str,
+    training_day_id: int,
     training_day_data: TrainingDayUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -228,7 +228,7 @@ def update_training_day(
 
 @router.delete("/{training_day_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_training_day(
-    training_day_id: str,
+    training_day_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -263,7 +263,7 @@ def delete_training_day(
 
 @router.post("/{training_day_id}/duplicate", response_model=TrainingDayResponse, status_code=status.HTTP_201_CREATED)
 def duplicate_training_day(
-    training_day_id: str,
+    training_day_id: int,
     new_day_number: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -329,7 +329,7 @@ def duplicate_training_day(
 
 @router.patch("/{training_day_id}/reorder", status_code=status.HTTP_200_OK)
 def reorder_exercises(
-    training_day_id: str,
+    training_day_id: int,
     request: ReorderRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

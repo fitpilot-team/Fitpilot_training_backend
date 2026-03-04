@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 import sys
 from pathlib import Path
 
@@ -20,6 +20,7 @@ if str(ROOT_DIR) not in sys.path:
 from sqlalchemy import text
 from models.base import SessionLocal
 from services.exercise_media_storage import (
+    EXERCISE_STATIC_DIR,
     StorageError,
     is_legacy_static_exercise_url,
     static_exercise_path_from_url,
@@ -27,6 +28,13 @@ from services.exercise_media_storage import (
 )
 
 MEDIA_COLUMNS = ("image_url", "thumbnail_url", "anatomy_image_url")
+FALLBACK_EXTENSION_PRIORITY = {
+    ".gif": 0,
+    ".webp": 1,
+    ".png": 2,
+    ".jpg": 3,
+    ".jpeg": 3,
+}
 
 
 def detect_exercises_schema(db) -> str:
@@ -70,16 +78,54 @@ class MigrationAudit:
     scanned_exercises: int = 0
     legacy_urls_found: int = 0
     updated_urls: int = 0
+    recovered_with_fallback: int = 0
     missing_files: int = 0
     upload_errors: int = 0
     missing_details: List[str] = field(default_factory=list)
     error_details: List[str] = field(default_factory=list)
+    fallback_details: List[str] = field(default_factory=list)
+
+
+def _extension_priority(path: Path) -> int:
+    return FALLBACK_EXTENSION_PRIORITY.get(path.suffix.lower(), 99)
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def find_fallback_local_file(
+    exercise_id: str,
+    cache: Dict[str, List[Path]],
+) -> Optional[Path]:
+    """
+    Find an alternative local file for an exercise when the exact filename is missing.
+
+    Selection policy:
+    1. Extension priority (gif > webp > png > jpg/jpeg)
+    2. Larger files first (prefer richer media variant)
+    3. Stable filename ordering
+    """
+    if exercise_id not in cache:
+        candidates = list(EXERCISE_STATIC_DIR.glob(f"{exercise_id}_*"))
+        candidates = [path for path in candidates if path.is_file()]
+        candidates.sort(
+            key=lambda path: (_extension_priority(path), -_file_size(path), path.name)
+        )
+        cache[exercise_id] = candidates
+
+    candidates = cache.get(exercise_id) or []
+    return candidates[0] if candidates else None
 
 
 def migrate(apply_changes: bool) -> MigrationAudit:
     db = SessionLocal()
     audit = MigrationAudit()
     migrated_cache: Dict[str, str] = {}
+    fallback_candidates_cache: Dict[str, List[Path]] = {}
 
     try:
         exercises_schema = detect_exercises_schema(db)
@@ -110,22 +156,34 @@ def migrate(apply_changes: bool) -> MigrationAudit:
 
                 audit.legacy_urls_found += 1
                 local_path = static_exercise_path_from_url(current_url)
+                source_path = local_path
 
                 if not local_path.exists():
-                    audit.missing_files += 1
-                    audit.missing_details.append(
-                        f"{exercise_id}::{column} -> missing file {local_path}"
+                    fallback_path = find_fallback_local_file(
+                        exercise_id=exercise_id,
+                        cache=fallback_candidates_cache,
                     )
-                    continue
+                    if fallback_path:
+                        source_path = fallback_path
+                        audit.recovered_with_fallback += 1
+                        audit.fallback_details.append(
+                            f"{exercise_id}::{column} -> missing {local_path.name}, using fallback {fallback_path.name}"
+                        )
+                    else:
+                        audit.missing_files += 1
+                        audit.missing_details.append(
+                            f"{exercise_id}::{column} -> missing file {local_path}"
+                        )
+                        continue
 
                 if current_url in migrated_cache:
                     new_url = migrated_cache[current_url]
                 elif apply_changes:
                     try:
                         new_url = upload_local_file_to_r2(
-                            local_file_path=local_path,
+                            local_file_path=source_path,
                             exercise_id=exercise_id,
-                            source_filename=local_path.name,
+                            source_filename=source_path.name,
                         )
                         migrated_cache[current_url] = new_url
                     except StorageError as exc:
@@ -136,7 +194,7 @@ def migrate(apply_changes: bool) -> MigrationAudit:
                         continue
                 else:
                     # dry-run placeholder URL to show deterministic change intent
-                    new_url = f"<R2_UPLOAD:{local_path.name}>"
+                    new_url = f"<R2_UPLOAD:{source_path.name}>"
 
                 if apply_changes:
                     db.execute(
@@ -167,6 +225,7 @@ def print_audit(audit: MigrationAudit, apply_changes: bool) -> None:
     print(f"Exercises scanned: {audit.scanned_exercises}")
     print(f"Legacy URLs found: {audit.legacy_urls_found}")
     print(f"URLs updated: {audit.updated_urls}")
+    print(f"Recovered with fallback: {audit.recovered_with_fallback}")
     print(f"Missing files: {audit.missing_files}")
     print(f"Upload errors: {audit.upload_errors}")
 
@@ -178,6 +237,11 @@ def print_audit(audit: MigrationAudit, apply_changes: bool) -> None:
     if audit.error_details:
         print("\nUpload error details (first 20):")
         for line in audit.error_details[:20]:
+            print(f" - {line}")
+
+    if audit.fallback_details:
+        print("\nFallback substitutions (first 20):")
+        for line in audit.fallback_details[:20]:
             print(f" - {line}")
 
     print("=== End Report ===\n")

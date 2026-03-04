@@ -13,7 +13,7 @@ from schemas.mesocycle import (
     TrainingDayCreate, TrainingDayUpdate, TrainingDayResponse,
     DayExerciseCreate, DayExerciseUpdate, DayExerciseResponse
 )
-from core.dependencies import get_current_user
+from core.dependencies import get_current_user, get_effective_user_role
 
 router = APIRouter()
 
@@ -27,7 +27,7 @@ def list_macrocycles(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     status: Optional[MesocycleStatus] = None,
-    client_id: Optional[str] = None
+    client_id: Optional[int] = None
 ):
     """
     Get list of macrocycles
@@ -39,14 +39,16 @@ def list_macrocycles(
     """
     query = db.query(Macrocycle)
 
+    role = get_effective_user_role(current_user)
+
     # Filter based on user role
-    if current_user.role.value == "client":
+    if role == "client":
         # Clients can only see their own macrocycles
         query = query.filter(Macrocycle.client_id == current_user.id)
     elif client_id:
         # Trainers/Admins can filter by client_id
         query = query.filter(Macrocycle.client_id == client_id)
-    elif current_user.role.value == "admin":
+    elif role == "admin":
         # Admins see all macrocycles (both templates and client programs)
         pass  # No filter applied
     else:
@@ -71,7 +73,7 @@ def list_macrocycles(
 
 @router.get("/{macrocycle_id}", response_model=MacrocycleResponse)
 def get_macrocycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -92,13 +94,15 @@ def get_macrocycle(
             detail=f"Macrocycle with id {macrocycle_id} not found"
         )
 
+    role = get_effective_user_role(current_user)
+
     # Check permissions
-    if current_user.role.value == "client" and macrocycle.client_id != current_user.id:
+    if role == "client" and macrocycle.client_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this macrocycle"
         )
-    elif current_user.role.value == "trainer" and macrocycle.trainer_id != current_user.id:
+    elif role == "trainer" and macrocycle.trainer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this macrocycle"
@@ -118,8 +122,10 @@ def create_macrocycle(
 
     Can optionally include nested mesocycles, microcycles, training days and exercises
     """
+    role = get_effective_user_role(current_user)
+
     # Only trainers and admins can create macrocycles
-    if current_user.role.value not in ["trainer", "admin"]:
+    if role not in ["trainer", "admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only trainers and admins can create macrocycles"
@@ -146,7 +152,7 @@ def create_macrocycle(
 
 @router.put("/{macrocycle_id}", response_model=MacrocycleResponse)
 def update_macrocycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     macrocycle_data: MacrocycleUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -162,8 +168,10 @@ def update_macrocycle(
             detail=f"Macrocycle with id {macrocycle_id} not found"
         )
 
+    role = get_effective_user_role(current_user)
+
     # Check permissions
-    if current_user.role.value == "trainer" and macrocycle.trainer_id != current_user.id:
+    if role == "trainer" and macrocycle.trainer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this macrocycle"
@@ -182,7 +190,7 @@ def update_macrocycle(
 
 @router.delete("/{macrocycle_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_macrocycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -199,8 +207,10 @@ def delete_macrocycle(
             detail=f"Macrocycle with id {macrocycle_id} not found"
         )
 
+    role = get_effective_user_role(current_user)
+
     # Check permissions
-    if current_user.role.value == "trainer" and macrocycle.trainer_id != current_user.id:
+    if role == "trainer" and macrocycle.trainer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this macrocycle"
@@ -216,7 +226,7 @@ def delete_macrocycle(
 
 @router.get("/{macrocycle_id}/mesocycles", response_model=MesocycleListResponse)
 def list_mesocycles(
-    macrocycle_id: str,
+    macrocycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -244,7 +254,7 @@ def list_mesocycles(
 
 @router.post("/{macrocycle_id}/mesocycles", response_model=MesocycleResponse, status_code=status.HTTP_201_CREATED)
 def create_mesocycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     mesocycle_data: MesocycleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -271,8 +281,8 @@ def create_mesocycle(
 
 @router.get("/{macrocycle_id}/mesocycles/{mesocycle_id}", response_model=MesocycleResponse)
 def get_mesocycle(
-    macrocycle_id: str,
-    mesocycle_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -286,8 +296,8 @@ def get_mesocycle(
 
 @router.put("/{macrocycle_id}/mesocycles/{mesocycle_id}", response_model=MesocycleResponse)
 def update_mesocycle(
-    macrocycle_id: str,
-    mesocycle_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
     mesocycle_data: MesocycleUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -309,8 +319,8 @@ def update_mesocycle(
 
 @router.delete("/{macrocycle_id}/mesocycles/{mesocycle_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_mesocycle(
-    macrocycle_id: str,
-    mesocycle_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -329,8 +339,8 @@ def delete_mesocycle(
 
 @router.post("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles", response_model=MicrocycleResponse, status_code=status.HTTP_201_CREATED)
 def create_microcycle(
-    macrocycle_id: str,
-    mesocycle_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
     microcycle_data: MicrocycleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -350,9 +360,9 @@ def create_microcycle(
 
 @router.put("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}", response_model=MicrocycleResponse)
 def update_microcycle(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
     microcycle_data: MicrocycleUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -374,9 +384,9 @@ def update_microcycle(
 
 @router.delete("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_microcycle(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -395,9 +405,9 @@ def delete_microcycle(
 
 @router.post("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}/days", response_model=TrainingDayResponse, status_code=status.HTTP_201_CREATED)
 def create_training_day(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
     day_data: TrainingDayCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -417,10 +427,10 @@ def create_training_day(
 
 @router.put("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}/days/{day_id}", response_model=TrainingDayResponse)
 def update_training_day(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
-    day_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
+    day_id: int,
     day_data: TrainingDayUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -442,10 +452,10 @@ def update_training_day(
 
 @router.delete("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}/days/{day_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_training_day(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
-    day_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
+    day_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -464,10 +474,10 @@ def delete_training_day(
 
 @router.post("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}/days/{day_id}/exercises", response_model=DayExerciseResponse, status_code=status.HTTP_201_CREATED)
 def create_day_exercise(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
-    day_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
+    day_id: int,
     exercise_data: DayExerciseCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -490,11 +500,11 @@ def create_day_exercise(
 
 @router.put("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}/days/{day_id}/exercises/{exercise_id}", response_model=DayExerciseResponse)
 def update_day_exercise(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
-    day_id: str,
-    exercise_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
+    day_id: int,
+    exercise_id: int,
     exercise_data: DayExerciseUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -516,11 +526,11 @@ def update_day_exercise(
 
 @router.delete("/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}/days/{day_id}/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_day_exercise(
-    macrocycle_id: str,
-    mesocycle_id: str,
-    microcycle_id: str,
-    day_id: str,
-    exercise_id: str,
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
+    day_id: int,
+    exercise_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -539,12 +549,14 @@ def delete_day_exercise(
 
 def _check_macrocycle_access(macrocycle: Macrocycle, current_user: User):
     """Check if user has access to view a macrocycle"""
-    if current_user.role.value == "client" and macrocycle.client_id != current_user.id:
+    role = get_effective_user_role(current_user)
+
+    if role == "client" and macrocycle.client_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this macrocycle"
         )
-    elif current_user.role.value == "trainer" and macrocycle.trainer_id != current_user.id:
+    elif role == "trainer" and macrocycle.trainer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this macrocycle"
@@ -553,19 +565,21 @@ def _check_macrocycle_access(macrocycle: Macrocycle, current_user: User):
 
 def _check_trainer_access(macrocycle: Macrocycle, current_user: User):
     """Check if user has trainer access to modify a macrocycle"""
-    if current_user.role.value not in ["trainer", "admin"]:
+    role = get_effective_user_role(current_user)
+
+    if role not in ["trainer", "admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only trainers and admins can modify training programs"
         )
-    if current_user.role.value == "trainer" and macrocycle.trainer_id != current_user.id:
+    if role == "trainer" and macrocycle.trainer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to modify this macrocycle"
         )
 
 
-def _get_mesocycle_or_404(db: Session, macrocycle_id: str, mesocycle_id: str) -> Mesocycle:
+def _get_mesocycle_or_404(db: Session, macrocycle_id: int, mesocycle_id: int) -> Mesocycle:
     """Get a mesocycle or raise 404"""
     mesocycle = db.query(Mesocycle).filter(
         Mesocycle.id == mesocycle_id,
@@ -581,7 +595,7 @@ def _get_mesocycle_or_404(db: Session, macrocycle_id: str, mesocycle_id: str) ->
     return mesocycle
 
 
-def _get_microcycle_or_404(db: Session, mesocycle_id: str, microcycle_id: str) -> Microcycle:
+def _get_microcycle_or_404(db: Session, mesocycle_id: int, microcycle_id: int) -> Microcycle:
     """Get a microcycle or raise 404"""
     microcycle = db.query(Microcycle).filter(
         Microcycle.id == microcycle_id,
@@ -597,7 +611,7 @@ def _get_microcycle_or_404(db: Session, mesocycle_id: str, microcycle_id: str) -
     return microcycle
 
 
-def _get_training_day_or_404(db: Session, microcycle_id: str, day_id: str) -> TrainingDay:
+def _get_training_day_or_404(db: Session, microcycle_id: int, day_id: int) -> TrainingDay:
     """Get a training day or raise 404"""
     training_day = db.query(TrainingDay).filter(
         TrainingDay.id == day_id,
@@ -613,7 +627,7 @@ def _get_training_day_or_404(db: Session, microcycle_id: str, day_id: str) -> Tr
     return training_day
 
 
-def _get_day_exercise_or_404(db: Session, day_id: str, exercise_id: str) -> DayExercise:
+def _get_day_exercise_or_404(db: Session, day_id: int, exercise_id: int) -> DayExercise:
     """Get a day exercise or raise 404"""
     day_exercise = db.query(DayExercise).filter(
         DayExercise.id == exercise_id,
@@ -629,7 +643,7 @@ def _get_day_exercise_or_404(db: Session, day_id: str, exercise_id: str) -> DayE
     return day_exercise
 
 
-def _create_mesocycle_nested(db: Session, macrocycle_id: str, meso_data: MesocycleCreate) -> Mesocycle:
+def _create_mesocycle_nested(db: Session, macrocycle_id: int, meso_data: MesocycleCreate) -> Mesocycle:
     """Create a mesocycle with nested microcycles"""
     meso_dict = meso_data.model_dump(exclude={"microcycles"})
     meso_dict["macrocycle_id"] = macrocycle_id
@@ -645,7 +659,7 @@ def _create_mesocycle_nested(db: Session, macrocycle_id: str, meso_data: Mesocyc
     return mesocycle
 
 
-def _create_microcycle_nested(db: Session, mesocycle_id: str, micro_data: MicrocycleCreate) -> Microcycle:
+def _create_microcycle_nested(db: Session, mesocycle_id: int, micro_data: MicrocycleCreate) -> Microcycle:
     """Create a microcycle with nested training days"""
     micro_dict = micro_data.model_dump(exclude={"training_days"})
     micro_dict["mesocycle_id"] = mesocycle_id
@@ -661,7 +675,7 @@ def _create_microcycle_nested(db: Session, mesocycle_id: str, micro_data: Microc
     return microcycle
 
 
-def _create_training_day_nested(db: Session, microcycle_id: str, day_data: TrainingDayCreate) -> TrainingDay:
+def _create_training_day_nested(db: Session, microcycle_id: int, day_data: TrainingDayCreate) -> TrainingDay:
     """Create a training day with nested exercises"""
     day_dict = day_data.model_dump(exclude={"exercises"})
     day_dict["microcycle_id"] = microcycle_id
