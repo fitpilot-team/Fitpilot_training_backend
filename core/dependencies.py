@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from models.base import get_db
 from models.user import ProfessionalRole, User
 from core.config import settings
-from core.security import introspect_nutrition_token, normalize_auth_role
+from core.security import introspect_nutrition_token_cached, normalize_auth_role
 
 security = HTTPBearer()
 
@@ -88,7 +88,7 @@ def get_current_user(
         )
 
     token = credentials.credentials
-    nutrition_payload = introspect_nutrition_token(token)
+    nutrition_payload = introspect_nutrition_token_cached(token)
     if nutrition_payload is None:
         raise credentials_exception
 

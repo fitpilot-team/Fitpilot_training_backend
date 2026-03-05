@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     NUTRITION_API_URL: Optional[str] = None
     NUTRITION_AUTH_ME_PATH: str = "/v1/auth/me"
     NUTRITION_AUTH_TIMEOUT_SECONDS: int = 8
+    NUTRITION_AUTH_CACHE_TTL_SECONDS: int = 25
 
     # Exercise media storage
     EXERCISE_MEDIA_PROVIDER: str = "local"  # local | r2
