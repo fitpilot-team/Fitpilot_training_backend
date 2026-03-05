@@ -1,6 +1,6 @@
 services:
   frontend:
-    container_name: fitpilot-frontend
+    container_name: ${FRONTEND_CONTAINER_NAME:-fitpilot-frontend}
     image: fitpilot-frontend:local
     build:
       context: .
@@ -9,5 +9,5 @@ services:
         VITE_NUTRITION_API_URL: ${VITE_NUTRITION_API_URL:-https://nutrition-api.fitpilot.fit}
         VITE_TRAINING_API_URL: ${VITE_TRAINING_API_URL:-http://localhost:3000}
     ports:
-      - "${FRONTEND_PORT:-5173}:80"
+      - "${FRONTEND_PORT:-4000}:80"
     restart: unless-stopped
