@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   HomeIcon,
-  BeakerIcon,
   DocumentDuplicateIcon,
   Cog6ToothIcon,
   UserIcon,
@@ -13,7 +12,7 @@ import {
   ClipboardDocumentListIcon,
   ListBulletIcon,
 } from '@heroicons/react/24/outline';
-import { Calendar, Utensils } from 'lucide-react';
+import { Calendar, Dumbbell, Utensils } from 'lucide-react';
 import fitPilotLogo from '../../assets/FitPilot-Logo.svg';
 import { useAuthStore } from '../../store/newAuthStore';
 import { useUIStore } from '../../store/uiStore';
@@ -29,7 +28,7 @@ interface NavItem {
 
 const trainingConfig: NavItem[] = [
   // { nameKey: 'dashboard', href: '/', icon: HomeIcon },
-  { nameKey: 'exercises', href: '/training/exercises', icon: BeakerIcon },
+  { nameKey: 'exercises', href: '/training/exercises', icon: Dumbbell },
   { nameKey: 'templates', href: '/training/programs', icon: DocumentDuplicateIcon },
 ];
 
