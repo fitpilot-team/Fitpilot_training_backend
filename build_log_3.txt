@@ -1,0 +1,9 @@
+
+> fit-pilot-frontend@1.0.0 build
+> tsc && vite build
+
+src/pages/nutrition/NutritionClientDetailPage.tsx(2,143): error TS6133: 'ChevronRight' is declared but its value is never read.
+src/pages/nutrition/NutritionClientsPage.tsx(4,1): error TS6133: 'clientsData' is declared but its value is never read.
+src/pages/nutrition/NutritionClientsPage.tsx(5,31): error TS6133: 'Filter' is declared but its value is never read.
+src/pages/nutrition/NutritionDashboardPage.tsx(14,3): error TS6133: 'parseISO' is declared but its value is never read.
+src/pages/nutrition/NutritionDashboardPage.tsx(262,41): error TS6133: 'dayIdx' is declared but its value is never read.

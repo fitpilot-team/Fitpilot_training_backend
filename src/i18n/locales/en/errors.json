@@ -1,0 +1,66 @@
+{
+  "validation": {
+    "required": "This field is required",
+    "invalidEmail": "Invalid email address",
+    "passwordTooShort": "Password must be at least 6 characters",
+    "passwordMismatch": "Passwords do not match",
+    "minLength": "Must be at least {{min}} characters",
+    "maxLength": "Cannot exceed {{max}} characters",
+    "invalidFormat": "Invalid format",
+    "invalidDate": "Invalid date",
+    "dateRequired": "Date is required",
+    "nameRequired": "Name is required",
+    "objectiveRequired": "Objective is required",
+    "clientRequired": "Client is required"
+  },
+
+  "api": {
+    "networkError": "Connection error. Please check your internet.",
+    "serverError": "Server error. Please try again later.",
+    "unauthorized": "Unauthorized. Please log in again.",
+    "forbidden": "You do not have permission to perform this action.",
+    "notFound": "Resource not found.",
+    "conflict": "Conflict with existing data.",
+    "badRequest": "Invalid request. Please verify the data.",
+    "timeout": "Request took too long. Please try again."
+  },
+
+  "auth": {
+    "emailAlreadyRegistered": "This email is already registered",
+    "incorrectCredentials": "Incorrect email or password",
+    "accountInactive": "Your account is inactive",
+    "sessionExpired": "Your session has expired"
+  },
+
+  "exercises": {
+    "createFailed": "Failed to create exercise",
+    "updateFailed": "Failed to update exercise",
+    "deleteFailed": "Failed to delete exercise",
+    "loadFailed": "Failed to load exercises"
+  },
+
+  "training": {
+    "saveFailed": "Failed to save training program",
+    "loadFailed": "Failed to load program",
+    "mesocycleFailed": "Failed to add mesocycle",
+    "microcycleFailed": "Failed to add microcycle",
+    "dayFailed": "Failed to add training day",
+    "exerciseFailed": "Failed to add exercise",
+    "deleteFailed": "Failed to delete",
+    "reorderFailed": "Failed to reorder exercises",
+    "moveFailed": "Failed to move exercise"
+  },
+
+  "clients": {
+    "createFailed": "Failed to create client",
+    "updateFailed": "Failed to update client",
+    "deleteFailed": "Failed to delete client",
+    "loadFailed": "Failed to load clients"
+  },
+
+  "generic": {
+    "unknownError": "An unknown error has occurred",
+    "tryAgain": "Please try again",
+    "contactSupport": "If the problem persists, contact support"
+  }
+}

@@ -1,0 +1,960 @@
+{
+  "clients": [
+    {
+      "id": "c1",
+      "firstName": "Ana",
+      "lastName": "García",
+      "email": "ana.garcia@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c1",
+      "goal": "Pérdida de Peso",
+      "status": "active",
+      "metrics": {
+        "startWeight": 85,
+        "currentWeight": 79.5,
+        "weightUnit": "kg",
+        "adherenceScore": 95,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-14T10:00:00.000Z",
+      "unreadMessages": 2,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Functional Training",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 0,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c2",
+      "firstName": "Carlos",
+      "lastName": "Ruiz",
+      "email": "carlos.ruiz@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c2",
+      "goal": "Hipertrofia",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 70,
+        "currentWeight": 70.5,
+        "weightUnit": "kg",
+        "adherenceScore": 45,
+        "daysSinceLastLog": 5
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Strength 5x5",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 4,
+        "currentPhase": "Mesocycle 1"
+      }
+    },
+    {
+      "id": "c3",
+      "firstName": "Mariana",
+      "lastName": "López",
+      "email": "mariana.lopez@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c3",
+      "goal": "Definición",
+      "status": "active",
+      "metrics": {
+        "startWeight": 65,
+        "currentWeight": 63.2,
+        "weightUnit": "kg",
+        "adherenceScore": 88,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": "2025-12-15T16:30:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Cardio & Core",
+        "assignedCoach": "Coach Sarah",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 0,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c4",
+      "firstName": "Jorge",
+      "lastName": "Martínez",
+      "email": "jorge.mtz@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c4",
+      "goal": "Salud General",
+      "status": "inactive",
+      "metrics": {
+        "startWeight": 90,
+        "currentWeight": 89,
+        "weightUnit": "kg",
+        "adherenceScore": 20,
+        "daysSinceLastLog": 14
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Mobility & Flexibility",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 2,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c5",
+      "firstName": "Lucía",
+      "lastName": "Fernández",
+      "email": "lucia.fer@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c5",
+      "goal": "Pérdida de Peso",
+      "status": "active",
+      "metrics": {
+        "startWeight": 72,
+        "currentWeight": 68,
+        "weightUnit": "kg",
+        "adherenceScore": 92,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-20T09:00:00.000Z",
+      "unreadMessages": 5,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Full Body 3 Days",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 2,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c6",
+      "firstName": "Miguel",
+      "lastName": "Ángel",
+      "email": "miguel.angel@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c6",
+      "goal": "Rendimiento Deportivo",
+      "status": "active",
+      "metrics": {
+        "startWeight": 78,
+        "currentWeight": 78,
+        "weightUnit": "kg",
+        "adherenceScore": 85,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": "2025-12-12T11:00:00.000Z",
+      "unreadMessages": 1,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Strength 5x5",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 1"
+      }
+    },
+    {
+      "id": "c7",
+      "firstName": "Sofía",
+      "lastName": "Ramírez",
+      "email": "sofia.ramirez@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c7",
+      "goal": "Keto",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 60,
+        "currentWeight": 61.5,
+        "weightUnit": "kg",
+        "adherenceScore": 55,
+        "daysSinceLastLog": 3
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Mobility & Flexibility",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 0,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c8",
+      "firstName": "David",
+      "lastName": "Torres",
+      "email": "david.torres@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c8",
+      "goal": "Hipertrofia",
+      "status": "active",
+      "metrics": {
+        "startWeight": 82,
+        "currentWeight": 84.5,
+        "weightUnit": "kg",
+        "adherenceScore": 98,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-18T15:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Cardio & Core",
+        "assignedCoach": "Coach Sarah",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c9",
+      "firstName": "Elena",
+      "lastName": "Gómez",
+      "email": "elena.gomez@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c9",
+      "goal": "Vegano",
+      "status": "active",
+      "metrics": {
+        "startWeight": 58,
+        "currentWeight": 57.5,
+        "weightUnit": "kg",
+        "adherenceScore": 90,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-22T12:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "PPL (Push Pull Legs)",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 1"
+      }
+    },
+    {
+      "id": "c10",
+      "firstName": "Roberto",
+      "lastName": "Díaz",
+      "email": "roberto.diaz@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c10",
+      "goal": "Pérdida de Peso",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 110,
+        "currentWeight": 109.5,
+        "weightUnit": "kg",
+        "adherenceScore": 60,
+        "daysSinceLastLog": 4
+      },
+      "nextAppointment": "2025-12-13T17:00:00.000Z",
+      "unreadMessages": 3,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Functional Training",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c11",
+      "firstName": "Patricia",
+      "lastName": "Vargas",
+      "email": "paty.vargas@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c11",
+      "goal": "Mantenimiento",
+      "status": "active",
+      "metrics": {
+        "startWeight": 62,
+        "currentWeight": 62,
+        "weightUnit": "kg",
+        "adherenceScore": 100,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "Functional Training",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c12",
+      "firstName": "Alejandro",
+      "lastName": "Castro",
+      "email": "alex.castro@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c12",
+      "goal": "Hipertrofia",
+      "status": "active",
+      "metrics": {
+        "startWeight": 75,
+        "currentWeight": 77.2,
+        "weightUnit": "kg",
+        "adherenceScore": 91,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": "2025-12-19T10:30:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "PPL (Push Pull Legs)",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 0,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c13",
+      "firstName": "Valeria",
+      "lastName": "Ortiz",
+      "email": "valeria.ortiz@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c13",
+      "goal": "Pérdida de Peso",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 88,
+        "currentWeight": 87.5,
+        "weightUnit": "kg",
+        "adherenceScore": 30,
+        "daysSinceLastLog": 8
+      },
+      "nextAppointment": null,
+      "unreadMessages": 1,
+      "serviceType": "Nutrition & Coaching",
+      "coachingData": {
+        "activePlan": "PPL (Push Pull Legs)",
+        "assignedCoach": "Coach Sarah",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 4,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c14",
+      "firstName": "Fernando",
+      "lastName": "Rios",
+      "email": "fernando.rios@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c14",
+      "goal": "Salud General",
+      "status": "inactive",
+      "metrics": {
+        "startWeight": 95,
+        "currentWeight": 95,
+        "weightUnit": "kg",
+        "adherenceScore": 0,
+        "daysSinceLastLog": 30
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c15",
+      "firstName": "Isabel",
+      "lastName": "Mendoza",
+      "email": "isa.mendoza@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c15",
+      "goal": "Definición",
+      "status": "active",
+      "metrics": {
+        "startWeight": 59,
+        "currentWeight": 57.8,
+        "weightUnit": "kg",
+        "adherenceScore": 82,
+        "daysSinceLastLog": 2
+      },
+      "nextAppointment": "2025-12-16T14:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c16",
+      "firstName": "Ricardo",
+      "lastName": "Silva",
+      "email": "ricardo.silva@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c16",
+      "goal": "Rendimiento Deportivo",
+      "status": "active",
+      "metrics": {
+        "startWeight": 80,
+        "currentWeight": 80,
+        "weightUnit": "kg",
+        "adherenceScore": 96,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-12T09:30:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c17",
+      "firstName": "Camila",
+      "lastName": "Vega",
+      "email": "camila.vega@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c17",
+      "goal": "Pérdida de Peso",
+      "status": "active",
+      "metrics": {
+        "startWeight": 70,
+        "currentWeight": 66.5,
+        "weightUnit": "kg",
+        "adherenceScore": 89,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": "2025-12-21T11:00:00.000Z",
+      "unreadMessages": 4,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c18",
+      "firstName": "Hugo",
+      "lastName": "Nuñez",
+      "email": "hugo.nunez@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c18",
+      "goal": "Hipertrofia",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 68,
+        "currentWeight": 68.2,
+        "weightUnit": "kg",
+        "adherenceScore": 50,
+        "daysSinceLastLog": 6
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c19",
+      "firstName": "Daniela",
+      "lastName": "Herrera",
+      "email": "dani.herrera@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c19",
+      "goal": "Vegetariano",
+      "status": "active",
+      "metrics": {
+        "startWeight": 55,
+        "currentWeight": 54.8,
+        "weightUnit": "kg",
+        "adherenceScore": 93,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-14T13:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c20",
+      "firstName": "Pablo",
+      "lastName": "Jiménez",
+      "email": "pablo.jimenez@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c20",
+      "goal": "Pérdida de Peso",
+      "status": "active",
+      "metrics": {
+        "startWeight": 105,
+        "currentWeight": 102,
+        "weightUnit": "kg",
+        "adherenceScore": 75,
+        "daysSinceLastLog": 2
+      },
+      "nextAppointment": "2025-12-23T16:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c21",
+      "firstName": "Lorena",
+      "lastName": "Guerrero",
+      "email": "lorena.guerrero@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c21",
+      "goal": "Definición",
+      "status": "active",
+      "metrics": {
+        "startWeight": 63,
+        "currentWeight": 61.5,
+        "weightUnit": "kg",
+        "adherenceScore": 86,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": null,
+      "unreadMessages": 1,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c22",
+      "firstName": "Andrés",
+      "lastName": "Rojas",
+      "email": "andres.rojas@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c22",
+      "goal": "Hipertrofia",
+      "status": "inactive",
+      "metrics": {
+        "startWeight": 72,
+        "currentWeight": 73,
+        "weightUnit": "kg",
+        "adherenceScore": 10,
+        "daysSinceLastLog": 25
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c23",
+      "firstName": "Natalia",
+      "lastName": "Cruz",
+      "email": "natalia.cruz@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c23",
+      "goal": "Pérdida de Peso",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 86,
+        "currentWeight": 85.5,
+        "weightUnit": "kg",
+        "adherenceScore": 42,
+        "daysSinceLastLog": 4
+      },
+      "nextAppointment": "2025-12-15T10:00:00.000Z",
+      "unreadMessages": 2,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c24",
+      "firstName": "Emilio",
+      "lastName": "Flores",
+      "email": "emilio.flores@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c24",
+      "goal": "Salud General",
+      "status": "active",
+      "metrics": {
+        "startWeight": 92,
+        "currentWeight": 90.5,
+        "weightUnit": "kg",
+        "adherenceScore": 80,
+        "daysSinceLastLog": 2
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c25",
+      "firstName": "Clara",
+      "lastName": "Pérez",
+      "email": "clara.perez@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c25",
+      "goal": "Definición",
+      "status": "active",
+      "metrics": {
+        "startWeight": 57,
+        "currentWeight": 55.5,
+        "weightUnit": "kg",
+        "adherenceScore": 94,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-17T15:30:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c26",
+      "firstName": "Javier",
+      "lastName": "Soto",
+      "email": "javier.soto@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c26",
+      "goal": "Hipertrofia",
+      "status": "active",
+      "metrics": {
+        "startWeight": 85,
+        "currentWeight": 87.5,
+        "weightUnit": "kg",
+        "adherenceScore": 97,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-19T17:00:00.000Z",
+      "unreadMessages": 1,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c27",
+      "firstName": "Beatriz",
+      "lastName": "Molina",
+      "email": "beatriz.molina@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c27",
+      "goal": "Pérdida de Peso",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 76,
+        "currentWeight": 76,
+        "weightUnit": "kg",
+        "adherenceScore": 35,
+        "daysSinceLastLog": 6
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Nutrition",
+      "coachingData": null
+    },
+    {
+      "id": "c28",
+      "firstName": "Raúl",
+      "lastName": "Dominguez",
+      "email": "raul.dominguez@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c28",
+      "goal": "Rendimiento Deportivo",
+      "status": "active",
+      "metrics": {
+        "startWeight": 74,
+        "currentWeight": 74,
+        "weightUnit": "kg",
+        "adherenceScore": 88,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": "2025-12-13T12:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Functional Training",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 0,
+        "currentPhase": "Mesocycle 1"
+      }
+    },
+    {
+      "id": "c29",
+      "firstName": "Gabriela",
+      "lastName": "Reyes",
+      "email": "gaby.reyes@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c29",
+      "goal": "Keto",
+      "status": "active",
+      "metrics": {
+        "startWeight": 64,
+        "currentWeight": 62,
+        "weightUnit": "kg",
+        "adherenceScore": 91,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Mobility & Flexibility",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c30",
+      "firstName": "Oscar",
+      "lastName": "Morales",
+      "email": "oscar.morales@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c30",
+      "goal": "Pérdida de Peso",
+      "status": "inactive",
+      "metrics": {
+        "startWeight": 100,
+        "currentWeight": 99,
+        "weightUnit": "kg",
+        "adherenceScore": 15,
+        "daysSinceLastLog": 20
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Functional Training",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 2,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c31",
+      "firstName": "Silvia",
+      "lastName": "Navarro",
+      "email": "silvia.navarro@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c31",
+      "goal": "Definición",
+      "status": "active",
+      "metrics": {
+        "startWeight": 56,
+        "currentWeight": 54.5,
+        "weightUnit": "kg",
+        "adherenceScore": 84,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": "2025-12-20T11:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Strength 5x5",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c32",
+      "firstName": "Héctor",
+      "lastName": "Salazar",
+      "email": "hector.salazar@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c32",
+      "goal": "Hipertrofia",
+      "status": "active",
+      "metrics": {
+        "startWeight": 79,
+        "currentWeight": 81,
+        "weightUnit": "kg",
+        "adherenceScore": 93,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": null,
+      "unreadMessages": 3,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "PPL (Push Pull Legs)",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c33",
+      "firstName": "Teresa",
+      "lastName": "Ibarra",
+      "email": "tere.ibarra@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c33",
+      "goal": "Salud General",
+      "status": "active",
+      "metrics": {
+        "startWeight": 68,
+        "currentWeight": 67.5,
+        "weightUnit": "kg",
+        "adherenceScore": 78,
+        "daysSinceLastLog": 2
+      },
+      "nextAppointment": "2025-12-18T10:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Mobility & Flexibility",
+        "assignedCoach": "Coach Sarah",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 1,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c34",
+      "firstName": "Rubén",
+      "lastName": "Pacheco",
+      "email": "ruben.pacheco@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c34",
+      "goal": "Pérdida de Peso",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 115,
+        "currentWeight": 114,
+        "weightUnit": "kg",
+        "adherenceScore": 48,
+        "daysSinceLastLog": 5
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Cardio & Core",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c35",
+      "firstName": "Ximena",
+      "lastName": "Cervantes",
+      "email": "ximena.cervantes@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c35",
+      "goal": "Vegano",
+      "status": "active",
+      "metrics": {
+        "startWeight": 54,
+        "currentWeight": 54,
+        "weightUnit": "kg",
+        "adherenceScore": 89,
+        "daysSinceLastLog": 1
+      },
+      "nextAppointment": "2025-12-14T09:00:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Upper/Lower Split",
+        "assignedCoach": "Coach Alex",
+        "weeklyWorkouts": 5,
+        "completedWorkouts": 2,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c36",
+      "firstName": "Diego",
+      "lastName": "Fuentes",
+      "email": "diego.fuentes@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c36",
+      "goal": "Hipertrofia",
+      "status": "active",
+      "metrics": {
+        "startWeight": 73,
+        "currentWeight": 75.5,
+        "weightUnit": "kg",
+        "adherenceScore": 95,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-12T16:00:00.000Z",
+      "unreadMessages": 1,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Mobility & Flexibility",
+        "assignedCoach": "Coach Sarah",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 0,
+        "currentPhase": "Mesocycle 1"
+      }
+    },
+    {
+      "id": "c37",
+      "firstName": "Mónica",
+      "lastName": "Aguilar",
+      "email": "monica.aguilar@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c37",
+      "goal": "Pérdida de Peso",
+      "status": "risk",
+      "metrics": {
+        "startWeight": 83,
+        "currentWeight": 83.5,
+        "weightUnit": "kg",
+        "adherenceScore": 52,
+        "daysSinceLastLog": 4
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Cardio & Core",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 4,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c38",
+      "firstName": "Alberto",
+      "lastName": "Mejia",
+      "email": "alberto.mejia@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c38",
+      "goal": "Mantenimiento",
+      "status": "active",
+      "metrics": {
+        "startWeight": 77,
+        "currentWeight": 77,
+        "weightUnit": "kg",
+        "adherenceScore": 80,
+        "daysSinceLastLog": 2
+      },
+      "nextAppointment": "2025-12-21T14:30:00.000Z",
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "PPL (Push Pull Legs)",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 3,
+        "completedWorkouts": 1,
+        "currentPhase": "Mesocycle 2"
+      }
+    },
+    {
+      "id": "c39",
+      "firstName": "Rosa",
+      "lastName": "Salinas",
+      "email": "rosa.salinas@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c39",
+      "goal": "Definición",
+      "status": "inactive",
+      "metrics": {
+        "startWeight": 61,
+        "currentWeight": 61,
+        "weightUnit": "kg",
+        "adherenceScore": 10,
+        "daysSinceLastLog": 45
+      },
+      "nextAppointment": null,
+      "unreadMessages": 0,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "PPL (Push Pull Legs)",
+        "assignedCoach": "Coach Sarah",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 3,
+        "currentPhase": "Mesocycle 3"
+      }
+    },
+    {
+      "id": "c40",
+      "firstName": "Luis",
+      "lastName": "Cordero",
+      "email": "luis.cordero@example.com",
+      "avatar": "https://i.pravatar.cc/150?u=c40",
+      "goal": "Hipertrofia",
+      "status": "active",
+      "metrics": {
+        "startWeight": 80,
+        "currentWeight": 82,
+        "weightUnit": "kg",
+        "adherenceScore": 94,
+        "daysSinceLastLog": 0
+      },
+      "nextAppointment": "2025-12-16T11:30:00.000Z",
+      "unreadMessages": 2,
+      "serviceType": "Coaching",
+      "coachingData": {
+        "activePlan": "Full Body 3 Days",
+        "assignedCoach": "Coach Mike",
+        "weeklyWorkouts": 4,
+        "completedWorkouts": 1,
+        "currentPhase": "Mesocycle 2"
+      }
+    }
+  ]
+}

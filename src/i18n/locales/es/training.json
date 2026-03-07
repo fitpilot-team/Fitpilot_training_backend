@@ -1,0 +1,352 @@
+{
+  "macrocycle": {
+    "title": "Programa de Entrenamiento",
+    "new": "Nuevo Programa",
+    "edit": "Editar Programa",
+    "info": "Información sobre el macrociclo",
+    "name": "Nombre del programa",
+    "namePlaceholder": "Ej: Programa de hipertrofia 12 semanas",
+    "description": "Descripción",
+    "descriptionPlaceholder": "Describe los objetivos y estructura del programa...",
+    "objective": "Objetivo",
+    "startDate": "Fecha de inicio",
+    "endDate": "Fecha de finalización",
+    "status": "Estado",
+    "client": "Cliente",
+    "noClient": "Sin cliente",
+    "createProgram": "Crear Programa",
+    "saveChanges": "Guardar Cambios"
+  },
+  "mesocycle": {
+    "title": "Mesociclo",
+    "titlePlural": "Mesociclos",
+    "add": "Agregar Mesociclo",
+    "addFirst": "Agregar Primer Mesociclo",
+    "blockNumber": "Número de Bloque",
+    "name": "Nombre",
+    "namePlaceholder": "Ej: Bloque de Hipertrofia",
+    "description": "Descripción",
+    "descriptionPlaceholder": "Describe este bloque de entrenamiento...",
+    "focus": "Enfoque",
+    "startDate": "Fecha de inicio",
+    "endDate": "Fecha de finalización",
+    "notes": "Notas",
+    "noMesocycles": "No hay mesociclos. Agrega bloques de entrenamiento a tu programa.",
+    "subtitle": "Bloques de entrenamiento dentro de este macrociclo (típicamente 3-6 semanas cada uno)"
+  },
+  "microcycle": {
+    "title": "Microciclo",
+    "titlePlural": "Microciclos",
+    "add": "Agregar Microciclo",
+    "weekNumber": "Número de Semana",
+    "name": "Nombre",
+    "namePlaceholder": "Ej: Fase de Fundación",
+    "startDate": "Fecha de inicio",
+    "endDate": "Fecha de finalización",
+    "intensityLevel": "Nivel de Intensidad",
+    "notes": "Notas",
+    "notesPlaceholder": "Notas opcionales para este microciclo...",
+    "header": "Micro {{number}}: {{name}}",
+    "dayCount_one": "{{count}} día de entrenamiento",
+    "dayCount_other": "{{count}} días de entrenamiento",
+    "printPdf": "Imprimir PDF",
+    "edit": "Editar Microciclo",
+    "viewMode": {
+      "list": "Lista",
+      "kanban": "Kanban"
+    },
+    "noDays": "No hay días de entrenamiento",
+    "addDay": "Añadir Día de Entrenamiento",
+    "printConfirm": {
+      "title": "¿Deseas generar el PDF de \"{{name}}\"?",
+      "week": "Semana",
+      "intensity": "Intensidad",
+      "days": "Días de entrenamiento",
+      "client": "Cliente"
+    }
+  },
+  "trainingDay": {
+    "title": "Día de Entrenamiento",
+    "titlePlural": "Días de Entrenamiento",
+    "add": "Agregar Día",
+    "dayNumber": "Número de Día (1-7)",
+    "date": "Fecha",
+    "name": "Nombre",
+    "namePlaceholder": "Ej: Empuje de Tren Superior",
+    "focus": "Enfoque",
+    "focusPlaceholder": "Ej: Pecho y Tríceps",
+    "notes": "Notas",
+    "restDay": "Día de Descanso",
+    "restDayDescription": "Este día está programado para recuperación",
+    "restDayPlaceholder": "Ej: Estiramientos suaves, caminata ligera...",
+    "edit": "Editar Día",
+    "delete": "Eliminar Día",
+    "dayName": "Día {{number}}",
+    "dayNamePlaceholder": "Nombre del día",
+    "clickToEdit": "Click para editar",
+    "exerciseCount_one": "{{count}} ejercicio",
+    "exerciseCount_other": "{{count}} ejercicios",
+    "warmup": "Calentamiento",
+    "dragToWarmup": "Arrastra aquí para calentar",
+    "workout": "Entrenamiento",
+    "cooldown": "Enfriamiento",
+    "dragToCooldown": "Arrastra aquí para enfriar",
+    "dropHere": "Soltar aquí",
+    "dragExercises": "Arrastra ejercicios",
+    "dropToAdd": "Soltar aquí para añadir",
+    "addDay": "Añadir Día",
+    "ofTraining": "de entrenamiento"
+  },
+  "dayExercise": {
+    "title": "Ejercicio del Día",
+    "add": "Agregar Ejercicio",
+    "sets": "Series",
+    "reps": "Repeticiones",
+    "repsRange": "Rango de Repeticiones",
+    "repsMin": "Rep. Mín",
+    "repsMax": "Rep. Máx",
+    "rest": "Descanso",
+    "restSeconds": "Descanso (segundos)",
+    "tempo": "Tempo",
+    "tempoPlaceholder": "Ej: 3-1-1-0",
+    "notes": "Notas",
+    "orderIndex": "Orden",
+    "config": "Configuración"
+  },
+  "effort": {
+    "type": "Tipo de Esfuerzo",
+    "value": "Valor",
+    "RIR": "RIR (Reps en Reserva)",
+    "RPE": "RPE (Esfuerzo Percibido)",
+    "percentage": "% del 1RM"
+  },
+  "intensity": {
+    "low": "Baja",
+    "medium": "Media",
+    "high": "Alta",
+    "deload": "Descarga"
+  },
+  "objectives": {
+    "hypertrophy": "Hipertrofia",
+    "strength": "Fuerza",
+    "power": "Potencia",
+    "endurance": "Resistencia",
+    "fat_loss": "Pérdida de grasa",
+    "general_fitness": "Fitness general"
+  },
+  "focus": {
+    "hypertrophy": "Hipertrofia",
+    "strength": "Fuerza",
+    "power": "Potencia",
+    "peaking": "Pico",
+    "deload": "Descarga",
+    "generalFitness": "Fitness General",
+    "select": "Seleccionar enfoque"
+  },
+  "templates": {
+    "title": "Plantillas de Entrenamiento",
+    "subtitle": "Crea plantillas de entrenamiento reutilizables para asignar a clientes",
+    "description": "Crea plantillas de entrenamiento reutilizables que pueden asignarse a múltiples clientes. Las plantillas contienen mesociclos, microciclos (semanas), días de entrenamiento y ejercicios.",
+    "new": "Nueva Plantilla",
+    "noTemplates": "No hay plantillas aún",
+    "createFirst": "Crear Primera Plantilla"
+  },
+  "messages": {
+    "programCreated": "Programa de entrenamiento creado correctamente",
+    "programUpdated": "Programa de entrenamiento actualizado correctamente",
+    "mesocycleAdded": "Mesociclo agregado correctamente",
+    "microcycleAdded": "Microciclo agregado con 7 días de entrenamiento",
+    "dayAdded": "Día de entrenamiento agregado correctamente",
+    "dayDeleted": "Día de entrenamiento eliminado",
+    "exerciseAdded": "Ejercicio agregado correctamente",
+    "exerciseUpdated": "Ejercicio actualizado",
+    "exerciseRemoved": "Ejercicio eliminado",
+    "dayEditComingSoon": "Edición de día próximamente"
+  },
+  "views": {
+    "list": "Lista",
+    "kanban": "Kanban"
+  },
+  "days": {
+    "monday": "Lunes",
+    "tuesday": "Martes",
+    "wednesday": "Miércoles",
+    "thursday": "Jueves",
+    "friday": "Viernes",
+    "saturday": "Sábado",
+    "sunday": "Domingo"
+  },
+  "tempo": {
+    "controlled": {
+      "label": "Controlado",
+      "description": "Énfasis en fase excéntrica. Mayor daño muscular y activación de fibras."
+    },
+    "explosive": {
+      "label": "Explosivo",
+      "description": "Velocidad máxima en concéntrico. Ideal para potencia y fuerza."
+    },
+    "tut": {
+      "label": "Tiempo bajo tensión",
+      "description": "Máximo TUT. Excelente para hipertrofia y conexión mente-músculo."
+    },
+    "standard": {
+      "label": "Estándar",
+      "description": "Ritmo equilibrado. Bueno para trabajo general."
+    },
+    "pause_rep": {
+      "label": "Pausa-Rep",
+      "description": "Pausa en punto de máxima tensión. Elimina el rebote y aumenta dificultad."
+    }
+  },
+  "setTypes": {
+    "straight": {
+      "label": "Serie normal",
+      "description": "Series estándar con descanso completo entre cada una."
+    },
+    "rest_pause": {
+      "label": "Rest-Pause",
+      "description": "Breves pausas (10-15s) para extender el set. Mayor volumen efectivo."
+    },
+    "drop_set": {
+      "label": "Drop Set",
+      "description": "Reducción de peso sin descanso. Máxima fatiga muscular."
+    },
+    "top_set": {
+      "label": "Top Set",
+      "description": "Serie principal con máximo esfuerzo. Base para calcular backoffs."
+    },
+    "backoff": {
+      "label": "Backoff Set",
+      "description": "Series de descarga con menor peso. Volumen adicional post-top set."
+    },
+    "myo_reps": {
+      "label": "Myo-Reps",
+      "description": "Serie activadora + mini-series. Alta eficiencia de tiempo."
+    },
+    "cluster": {
+      "label": "Cluster Set",
+      "description": "Micro-pausas intra-set. Permite más reps con cargas pesadas."
+    }
+  },
+  "configModal": {
+    "title": "Configurar Ejercicio",
+    "anatomyOf": "Anatomía de {{name}}",
+    "sets": "Series",
+    "minReps": "Reps Mín",
+    "maxReps": "Reps Máx",
+    "restSeconds": "Descanso (segundos)",
+    "setType": "Tipo de Serie",
+    "availableSetTypes": "Tipos de series disponibles:",
+    "tempo": "Tempo (cadencia)",
+    "tempoFormat": "Formato: Excéntrico - Pausa - Concéntrico - Pausa",
+    "tempoHelp": "Los números indican segundos para cada fase del movimiento",
+    "effortType": "Tipo de Esfuerzo",
+    "effortValue": "Valor",
+    "notes": "Notas",
+    "notesPlaceholder": "Añade notas sobre técnica, claves o modificaciones...",
+    "removeExercise": "Eliminar Ejercicio",
+    "cancel": "Cancelar",
+    "saveChanges": "Guardar Cambios",
+    "confirmDelete": "¿Estás seguro de que deseas eliminar este ejercicio?",
+    "cardio": {
+      "hiitMode": "HIIT - Entrenamiento de Intervalos de Alta Intensidad",
+      "lissMode": "LISS - Cardio de Baja Intensidad Constante",
+      "missMode": "MISS - Cardio de Intensidad Moderada Constante",
+      "intervals": "Intervalos",
+      "totalDuration": "Duración Total",
+      "workSeconds": "Trabajo (seg)",
+      "restSeconds": "Descanso (seg)",
+      "workRestRatio": "Ratio Trabajo:Descanso",
+      "intensityZone": "Zona de Intensidad",
+      "duration": "Duración",
+      "distance": "Distancia (km)",
+      "calories": "Calorías",
+      "optional": "Opcional",
+      "lissRecommendation": "LISS recomendado: Zona 1-2",
+      "missRecommendation": "MISS recomendado: Zona 2-3",
+      "notesPlaceholderHiit": "Ej: Sprints en bicicleta, burpees...",
+      "notesPlaceholderSteady": "Ej: Caminata en cinta, bicicleta estática...",
+      "zones": {
+        "recovery": "Recuperación",
+        "endurance": "Resistencia",
+        "aerobic": "Aeróbico",
+        "threshold": "Umbral",
+        "maximal": "Máximo"
+      }
+    }
+  },
+  "library": {
+    "title": "Biblioteca",
+    "dragSubtitle": "Arrastra ejercicios",
+    "searchPlaceholder": "Buscar ejercicios...",
+    "filters": "Filtros",
+    "muscleGroup": "Grupo Muscular",
+    "clearFilters": "Limpiar filtros",
+    "exerciseCount_one": "{{count}} ejercicio",
+    "exerciseCount_other": "{{count}} ejercicios",
+    "filtered": "Filtrado",
+    "noExercisesFound": "No se encontraron ejercicios",
+    "dragToColumns": "Arrastra ejercicios a las columnas",
+    "allMuscles": "Todos"
+  },
+  "pdf": {
+    "client": "Cliente",
+    "printed": "Impreso",
+    "week": "Semana",
+    "day": "Día",
+    "focus": "Foco",
+    "datePerformed": "Fecha de realización",
+    "dayNotes": "Notas del día",
+    "restDay": "Día de descanso",
+    "noExercises": "Sin ejercicios planeados",
+    "warmup": "Calentamiento",
+    "mainWorkout": "Entrenamiento Principal",
+    "cooldown": "Enfriamiento",
+    "exercise": "Ejercicio",
+    "type": "Tipo",
+    "sets": "Series",
+    "reps": "Reps",
+    "intensity": "Intensidad",
+    "rest": "Desc",
+    "tempo": "Tempo",
+    "page": "Página",
+    "of": "de",
+    "generatedWith": "Generado con FitPilot",
+    "generalRecommendations": "Recomendaciones Generales",
+    "setTypes": {
+      "straight": "Normal",
+      "rest_pause": "Rest Pause",
+      "drop_set": "Drop Set",
+      "top_set": "Top Set",
+      "backoff": "Backoff",
+      "myo_reps": "Myo Reps",
+      "cluster": "Cluster"
+    },
+    "recommendations": {
+      "rir": {
+        "title": "RIR (Repeticiones en Reserva)",
+        "text": "Número de repeticiones que podrías haber realizado con buena técnica antes de llegar al fallo muscular. RIR 2 significa que podrías haber hecho 2 más."
+      },
+      "rpe": {
+        "title": "RPE (Percepción del Esfuerzo)",
+        "text": "Escala del 1 al 10. 10 es esfuerzo máximo (fallo), 9 es una repetición en reserva, 8 son dos, etc."
+      },
+      "warmupSets": {
+        "title": "Series de Aproximación",
+        "text": "Realiza 1-2 series ligeras antes de las series efectivas del primer ejercicio de cada grupo muscular."
+      },
+      "rest": {
+        "title": "Descanso",
+        "text": "Respeta los tiempos de descanso indicados para asegurar la recuperación del sistema nervioso y muscular."
+      },
+      "tempo": {
+        "title": "Tempo",
+        "text": "Velocidad de ejecución. Ejemplo \"3010\": 3s bajada, 0s pausa abajo, 1s subida, 0s pausa arriba."
+      },
+      "progression": {
+        "title": "Progresión",
+        "text": "Intenta mejorar en peso, repeticiones o técnica en cada sesión."
+      }
+    }
+  }
+}

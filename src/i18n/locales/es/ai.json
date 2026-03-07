@@ -1,0 +1,348 @@
+{
+  "title": "Generador de Rutinas con IA",
+  "subtitle": "Crea programas de entrenamiento personalizados",
+
+  "page": {
+    "accessRestricted": "Acceso Restringido",
+    "trainersOnly": "Solo los entrenadores pueden generar programas de entrenamiento.",
+    "backToDashboard": "Volver al Dashboard",
+    "client": "Cliente",
+    "selectClient": "Seleccionar cliente",
+    "testUser": "Yo mismo (para pruebas)",
+    "createInMinutes": "Crea un programa personalizado en minutos",
+    "answerQuestionnaire": "Responde el cuestionario y nuestra IA creará un programa de entrenamiento completo adaptado a los objetivos, disponibilidad y equipamiento de tu cliente.",
+    "selectClientFirst": "Selecciona un cliente en la parte superior antes de comenzar el cuestionario.",
+    "selectMode": "Selecciona el modo de creación",
+    "configureTemplate": "Configurar plantilla",
+    "createTemplate": "Crear plantilla de entrenamiento",
+    "createForClient": "Crear programa para {{name}}",
+    "generating": "Generando programa...",
+    "previewProgram": "Vista previa del programa",
+    "creatingTemplate": "Creando plantilla reutilizable",
+    "creatingForClient": "Creando programa para cliente",
+    "for": "Para",
+    "continueToGeneration": "Continuar a generación",
+    "continueToQuestionnaire": "Continuar al cuestionario"
+  },
+
+  "wizard": {
+    "generateProgram": "Generar Programa",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "saveInterview": "Guardar Entrevista",
+    "interviewNote": "Esta información se usará para generar programas de entrenamiento personalizados"
+  },
+
+  "modeSelector": {
+    "title": "¿Qué deseas crear?",
+    "subtitle": "Elige si quieres crear una plantilla reutilizable o un programa para un cliente específico.",
+    "template": {
+      "title": "Crear Plantilla",
+      "description": "Diseña una plantilla de entrenamiento reutilizable que podrás asignar a múltiples clientes.",
+      "feature1": "Reutilizable para múltiples clientes",
+      "feature2": "Define perfil objetivo genérico",
+      "feature3": "Guárdala en tu biblioteca"
+    },
+    "client": {
+      "title": "Crear para Cliente",
+      "description": "Genera un programa personalizado usando los datos de la entrevista inicial del cliente.",
+      "feature1": "Datos automáticos de la entrevista",
+      "feature2": "Programa 100% personalizado",
+      "feature3": "Solo configura la duración"
+    }
+  },
+
+  "clientSelector": {
+    "label": "Selecciona un cliente",
+    "placeholder": "Buscar cliente...",
+    "validating": "Validando información del cliente...",
+    "interviewComplete": "Entrevista completa",
+    "readyToGenerate": "Los datos de la entrevista se usarán para generar el programa personalizado.",
+    "interviewIncomplete": "Entrevista incompleta",
+    "noInterview": "Sin entrevista",
+    "missingFields": "Campos faltantes",
+    "completeInterview": "Completar entrevista",
+    "error": "Error validando"
+  },
+
+  "templateConfig": {
+    "title": "Configura tu plantilla",
+    "description": "Dale un nombre descriptivo a tu plantilla para identificarla fácilmente.",
+    "nameLabel": "Nombre de la plantilla",
+    "namePlaceholder": "Ej: Hipertrofia 4 días - Intermedio",
+    "nameHelp": "Un buen nombre describe el objetivo, frecuencia y nivel de la plantilla"
+  },
+
+  "interview": {
+    "title": "Entrevista Inicial",
+    "subtitle": "Evaluación inicial de {{name}}",
+    "hasData": "Datos guardados",
+    "infoText": "Completa esta entrevista para recopilar información importante sobre el cliente. Estos datos se usarán automáticamente cuando generes programas de entrenamiento con IA.",
+    "saved": "Entrevista guardada correctamente",
+    "saveError": "Error al guardar la entrevista",
+    "saveButton": "Guardar Entrevista",
+    "lastSaved": "Última actualización: {{time}}"
+  },
+
+  "steps": {
+    "profile": "Perfil",
+    "goals": "Objetivos",
+    "availability": "Disponibilidad",
+    "equipment": "Equipamiento",
+    "restrictions": "Restricciones",
+    "preferences": "Preferencias"
+  },
+
+  "profile": {
+    "title": "Perfil Personal",
+    "subtitle": "Cuéntanos sobre ti para personalizar tu programa de entrenamiento.",
+    "fitnessLevel": "Nivel de fitness",
+    "fitnessLevelRequired": "Nivel de fitness *",
+    "age": "Edad",
+    "agePlaceholder": "Ej: 28",
+    "gender": "Género",
+    "genderSelect": "Seleccionar",
+    "weight": "Peso (kg)",
+    "weightPlaceholder": "Ej: 75",
+    "height": "Altura (cm)",
+    "heightPlaceholder": "Ej: 175",
+    "experience": "Meses de experiencia entrenando",
+    "experiencePlaceholder": "Ej: 24",
+    "experienceHelp": "Incluye todo tu tiempo de entrenamiento regular con pesas"
+  },
+
+  "fitnessLevels": {
+    "beginner": "Principiante",
+    "beginnerDesc": "Menos de 1 año de entrenamiento regular",
+    "intermediate": "Intermedio",
+    "intermediateDesc": "1-3 años de entrenamiento regular",
+    "advanced": "Avanzado",
+    "advancedDesc": "Más de 3 años de entrenamiento regular"
+  },
+
+  "genders": {
+    "male": "Masculino",
+    "female": "Femenino",
+    "other": "Otro"
+  },
+
+  "goals": {
+    "title": "Objetivos de Entrenamiento",
+    "subtitle": "Define qué quieres lograr con tu programa de entrenamiento.",
+    "primary": "Objetivo principal *",
+    "secondary": "Objetivos Secundarios",
+    "muscleGroupsLabel": "Grupos musculares a enfatizar (opcional)",
+    "muscleGroupsHelp": "Selecciona los grupos que quieres priorizar en tu entrenamiento",
+    "specificGoals": "Objetivos específicos (opcional)",
+    "specificGoalsPlaceholder": "Ej: Aumentar mi press banca a 100kg, mejorar la definición de brazos, corregir desequilibrios musculares...",
+    "specificGoalsHelp": "Separa cada objetivo con una coma",
+    "options": {
+      "hypertrophy": "Ganar masa muscular",
+      "hypertrophyDesc": "Maximizar el crecimiento muscular",
+      "strength": "Aumentar fuerza",
+      "strengthDesc": "Mejorar la fuerza máxima",
+      "power": "Mejorar potencia",
+      "powerDesc": "Desarrollar explosividad y velocidad",
+      "endurance": "Resistencia muscular",
+      "enduranceDesc": "Mejorar la resistencia y aguante",
+      "fat_loss": "Perder grasa",
+      "fat_lossDesc": "Reducir grasa corporal manteniendo músculo",
+      "general_fitness": "Fitness general",
+      "general_fitnessDesc": "Mejorar la salud y condición física general"
+    }
+  },
+
+  "muscleGroups": {
+    "chest": "Pecho",
+    "back": "Espalda",
+    "shoulders": "Hombros",
+    "arms": "Brazos",
+    "legs": "Piernas",
+    "core": "Core"
+  },
+
+  "availability": {
+    "title": "Disponibilidad",
+    "subtitle": "Cuéntanos cuánto tiempo puedes dedicar al entrenamiento.",
+    "daysPerWeek": "Días por semana *",
+    "daysMin": "1 día",
+    "daysMax": "7 días",
+    "sessionDuration": "Duración de cada sesión (minutos) *",
+    "durationMin": "20 min",
+    "durationMax": "120 min",
+    "preferredDays": "Días preferidos (opcional)",
+    "preferredDaysHelp": "Selecciona los días que prefieres entrenar",
+    "daysSelected": "{{count}} días seleccionados",
+    "summary": "Resumen",
+    "summaryText": "Entrenarás <strong>{{days}} días</strong> por semana, con sesiones de aproximadamente <strong>{{duration}} minutos</strong> cada una.",
+    "highFrequencyWarning": "Nota: Con 5+ días de entrenamiento, es importante asegurar una recuperación adecuada."
+  },
+
+  "days": {
+    "monday": "Lunes",
+    "tuesday": "Martes",
+    "wednesday": "Miércoles",
+    "thursday": "Jueves",
+    "friday": "Viernes",
+    "saturday": "Sábado",
+    "sunday": "Domingo",
+    "mondayShort": "L",
+    "tuesdayShort": "M",
+    "wednesdayShort": "X",
+    "thursdayShort": "J",
+    "fridayShort": "V",
+    "saturdayShort": "S",
+    "sundayShort": "D"
+  },
+
+  "equipment": {
+    "title": "Equipamiento Disponible",
+    "subtitle": "Indica qué equipamiento tienes disponible para entrenar.",
+    "gymAccess": "¿Tienes acceso a un gimnasio? *",
+    "hasGym": "Sí, tengo gimnasio",
+    "noGym": "No, entreno en casa",
+    "availableEquipment": "Equipamiento disponible *",
+    "availableEquipmentHelp": "Selecciona todo el equipamiento que puedes usar",
+    "notes": "Notas adicionales (opcional)",
+    "notesPlaceholder": "Ej: Solo tengo mancuernas hasta 20kg, mi banco no es ajustable...",
+    "selectedCount": "Equipamiento seleccionado: {{count}}",
+    "options": {
+      "barbell": "Barra olímpica",
+      "barbellDesc": "Barra recta con discos",
+      "dumbbells": "Mancuernas",
+      "dumbbellsDesc": "Mancuernas ajustables o fijas",
+      "cables": "Poleas/Cables",
+      "cablesDesc": "Máquinas de cable",
+      "machines": "Máquinas",
+      "machinesDesc": "Máquinas de gimnasio",
+      "kettlebells": "Kettlebells",
+      "kettlebellsDesc": "Pesas rusas",
+      "resistance_bands": "Bandas elásticas",
+      "resistance_bandsDesc": "Bandas de resistencia",
+      "pull_up_bar": "Barra de dominadas",
+      "pull_up_barDesc": "Para dominadas y colgados",
+      "bench": "Banco",
+      "benchDesc": "Banco plano o ajustable",
+      "squat_rack": "Rack de sentadillas",
+      "squat_rackDesc": "Para sentadillas y press",
+      "bodyweight": "Peso corporal",
+      "bodyweightDesc": "Sin equipamiento"
+    }
+  },
+
+  "restrictions": {
+    "title": "Restricciones y Limitaciones",
+    "subtitle": "Cuéntanos si tienes alguna limitación física que debamos considerar. Esta información es opcional pero nos ayuda a crear un programa más seguro.",
+    "important": "Importante",
+    "importantText": "Si tienes lesiones graves o condiciones médicas, te recomendamos consultar con un profesional de la salud antes de comenzar cualquier programa de entrenamiento.",
+    "injuries": "Lesiones actuales o pasadas",
+    "injuriesPlaceholder": "Ej: Dolor de rodilla izquierda, hernia discal L5, tendinitis en el hombro derecho...",
+    "injuriesHelp": "Separa cada lesión con una coma",
+    "excludedExercises": "Ejercicios que deseas evitar",
+    "excludedExercisesPlaceholder": "Ej: Sentadilla trasera, peso muerto convencional, press militar...",
+    "excludedExercisesHelp": "Ejercicios que te causan molestias o simplemente no quieres hacer",
+    "medical": "Condiciones médicas relevantes",
+    "medicalPlaceholder": "Ej: Hipertensión, diabetes tipo 2, problemas cardíacos...",
+    "mobility": "Limitaciones de movilidad",
+    "mobilityPlaceholder": "Ej: No puedo levantar los brazos por encima de la cabeza, movilidad de cadera limitada...",
+    "summary": "Resumen",
+    "summaryText": "Hemos tomado nota de tus restricciones. El programa se adaptará para evitar ejercicios que puedan causarte problemas y se ajustará a tus limitaciones de movilidad."
+  },
+
+  "preferences": {
+    "title": "Preferencias y Duración",
+    "subtitle": "Personaliza tu programa y define cuánto durará.",
+    "exerciseVariety": "Variedad de ejercicios",
+    "trainingStyle": "Estilo de entrenamiento preferido",
+    "additionalOptions": "Opciones adicionales",
+    "includeWarmup": "Incluir calentamiento recomendado",
+    "includeCardio": "Incluir sesiones de cardio",
+    "includeDeload": "Incluir semanas de descarga",
+    "programDuration": "Duración del Programa",
+    "totalWeeks": "Duración total (semanas) *",
+    "mesocycleWeeks": "Duración de cada bloque",
+    "startDate": "Fecha de inicio *",
+    "programSummary": "Resumen de tu programa",
+    "durationSummary": "Duración: <strong>{{weeks}} semanas</strong> en <strong>{{blocks}}</strong> bloque(s)",
+    "startSummary": "Inicio: <strong>{{date}}</strong>",
+    "deloadIncluded": "Incluirá semanas de descarga para recuperación",
+    "deloadNotIncluded": "Sin semanas de descarga programadas",
+    "variety": {
+      "low": "Baja",
+      "lowDesc": "Mismos ejercicios básicos cada semana, fácil de seguir",
+      "medium": "Media",
+      "mediumDesc": "Variedad moderada, balance entre consistencia y novedad",
+      "high": "Alta",
+      "highDesc": "Máxima variedad, diferentes ejercicios frecuentemente"
+    },
+    "trainingStyles": {
+      "auto": "Dejar que la IA decida",
+      "push_pull_legs": "Push/Pull/Legs",
+      "upper_lower": "Upper/Lower (Torso/Pierna)",
+      "full_body": "Full Body",
+      "bro_split": "Bro Split (1 músculo por día)"
+    }
+  },
+
+  "generation": {
+    "generating": "Generando tu programa de entrenamiento personalizado...",
+    "timeWarning": "Esto puede tomar hasta 2 minutos. Estamos analizando tus objetivos y creando un programa optimizado para ti.",
+    "saving": "Guardando tu programa...",
+    "savingDescription": "Estamos guardando tu programa en la base de datos. Serás redirigido al editor en un momento.",
+    "savingProgram": "Guardando en base de datos",
+    "analyzing": "Analizando perfil y objetivos",
+    "selecting": "Seleccionando ejercicios óptimos",
+    "structuring": "Estructurando periodización",
+    "calculating": "Calculando volumen e intensidad",
+    "success": "¡Programa generado exitosamente!",
+    "error": "Error al generar el programa"
+  },
+
+  "preview": {
+    "title": "Vista Previa del Programa",
+    "blocks": "bloques",
+    "weeks": "semanas",
+    "warnings": "Advertencias",
+    "whyThisProgram": "Por qué este programa",
+    "progressionStrategy": "Estrategia de progresión",
+    "tips": "Consejos",
+    "programStructure": "Estructura del Programa",
+    "block": "Bloque",
+    "restDay": "Día de descanso",
+    "exercises": "ejercicios",
+    "exercise": "Ejercicio",
+    "sets": "Series",
+    "reps": "Reps",
+    "rir": "RIR",
+    "rest": "Descanso",
+    "regenerate": "Regenerar",
+    "save": "Guardar Programa",
+    "saving": "Guardando..."
+  },
+
+  "quickConfig": {
+    "title": "Configuración Rápida",
+    "subtitle": "Los datos de {{name}} ya están cargados. Solo configura la duración del programa.",
+    "clientSummary": "Resumen del cliente",
+    "level": "Nivel",
+    "goal": "Objetivo",
+    "daysPerWeek": "Días/semana",
+    "equipment": "Equipamiento",
+    "gymAccess": "Acceso a gimnasio",
+    "homeTraining": "Entrena en casa",
+    "editClientData": "Editar datos del cliente",
+    "programConfig": "Configuración del programa",
+    "generateProgram": "Generar Programa",
+    "mesocycleInfo": "Esto creará {{blocks}} bloque(s) de {{weeks}} semanas"
+  },
+
+  "errors": {
+    "selectClient": "Por favor selecciona un cliente",
+    "templateNameRequired": "El nombre de la plantilla es requerido"
+  },
+
+  "messages": {
+    "programSaved": "Programa guardado exitosamente",
+    "generatedBy": "Programa Generado por IA"
+  }
+}

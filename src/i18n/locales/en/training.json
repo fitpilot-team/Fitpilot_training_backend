@@ -1,0 +1,352 @@
+{
+  "macrocycle": {
+    "title": "Training Program",
+    "new": "New Program",
+    "edit": "Edit Program",
+    "info": "Macrocycle information",
+    "name": "Program name",
+    "namePlaceholder": "Ex: 12-week Hypertrophy Program",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe the program objectives and structure...",
+    "objective": "Objective",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "status": "Status",
+    "client": "Client",
+    "noClient": "No client",
+    "createProgram": "Create Program",
+    "saveChanges": "Save Changes"
+  },
+  "mesocycle": {
+    "title": "Mesocycle",
+    "titlePlural": "Mesocycles",
+    "add": "Add Mesocycle",
+    "addFirst": "Add First Mesocycle",
+    "blockNumber": "Block Number",
+    "name": "Name",
+    "namePlaceholder": "Ex: Hypertrophy Block",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe this training block...",
+    "focus": "Focus",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "notes": "Notes",
+    "noMesocycles": "No mesocycles. Add training blocks to your program.",
+    "subtitle": "Training blocks within this macrocycle (typically 3-6 weeks each)"
+  },
+  "microcycle": {
+    "title": "Microcycle",
+    "titlePlural": "Microcycles",
+    "add": "Add Microcycle",
+    "weekNumber": "Week Number",
+    "name": "Name",
+    "namePlaceholder": "Ex: Foundation Phase",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "intensityLevel": "Intensity Level",
+    "notes": "Notes",
+    "notesPlaceholder": "Optional notes for this microcycle...",
+    "header": "Micro {{number}}: {{name}}",
+    "dayCount_one": "{{count}} training day",
+    "dayCount_other": "{{count}} training days",
+    "printPdf": "Print PDF",
+    "edit": "Edit Microcycle",
+    "viewMode": {
+      "list": "List",
+      "kanban": "Kanban"
+    },
+    "noDays": "No training days yet",
+    "addDay": "Add Training Day",
+    "printConfirm": {
+      "title": "Do you want to generate the PDF for \"{{name}}\"?",
+      "week": "Week",
+      "intensity": "Intensity",
+      "days": "Training days",
+      "client": "Client"
+    }
+  },
+  "trainingDay": {
+    "title": "Training Day",
+    "titlePlural": "Training Days",
+    "add": "Add Day",
+    "dayNumber": "Day Number (1-7)",
+    "date": "Date",
+    "name": "Name",
+    "namePlaceholder": "Ex: Upper Body Push",
+    "focus": "Focus",
+    "focusPlaceholder": "Ex: Chest and Triceps",
+    "notes": "Notes",
+    "restDay": "Rest Day",
+    "restDayDescription": "This day is scheduled for recovery",
+    "restDayPlaceholder": "Ex: Light stretching, easy walk...",
+    "edit": "Edit Day",
+    "delete": "Delete Day",
+    "dayName": "Day {{number}}",
+    "dayNamePlaceholder": "Day name",
+    "clickToEdit": "Click to edit",
+    "exerciseCount_one": "{{count}} exercise",
+    "exerciseCount_other": "{{count}} exercises",
+    "warmup": "Warm-up",
+    "dragToWarmup": "Drag here to warm up",
+    "workout": "Workout",
+    "cooldown": "Cool-down",
+    "dragToCooldown": "Drag here to cool down",
+    "dropHere": "Drop here",
+    "dragExercises": "Drag exercises",
+    "dropToAdd": "Drop here to add",
+    "addDay": "Add Day",
+    "ofTraining": "of training"
+  },
+  "dayExercise": {
+    "title": "Day Exercise",
+    "add": "Add Exercise",
+    "sets": "Sets",
+    "reps": "Reps",
+    "repsRange": "Rep Range",
+    "repsMin": "Min Reps",
+    "repsMax": "Max Reps",
+    "rest": "Rest",
+    "restSeconds": "Rest (seconds)",
+    "tempo": "Tempo",
+    "tempoPlaceholder": "Ex: 3-1-1-0",
+    "notes": "Notes",
+    "orderIndex": "Order",
+    "config": "Configuration"
+  },
+  "effort": {
+    "type": "Effort Type",
+    "value": "Value",
+    "RIR": "RIR (Reps in Reserve)",
+    "RPE": "RPE (Rate of Perceived Exertion)",
+    "percentage": "% of 1RM"
+  },
+  "intensity": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "deload": "Deload"
+  },
+  "objectives": {
+    "hypertrophy": "Hypertrophy",
+    "strength": "Strength",
+    "power": "Power",
+    "endurance": "Endurance",
+    "fat_loss": "Fat Loss",
+    "general_fitness": "General Fitness"
+  },
+  "focus": {
+    "hypertrophy": "Hypertrophy",
+    "strength": "Strength",
+    "power": "Power",
+    "peaking": "Peaking",
+    "deload": "Deload",
+    "generalFitness": "General Fitness",
+    "select": "Select focus"
+  },
+  "templates": {
+    "title": "Training Templates",
+    "subtitle": "Create reusable training templates that can be assigned to clients",
+    "description": "Create reusable training templates that can be assigned to multiple clients. Templates contain mesocycles, microcycles (weeks), training days, and exercises.",
+    "new": "New Template",
+    "noTemplates": "No templates yet",
+    "createFirst": "Create First Template"
+  },
+  "messages": {
+    "programCreated": "Training program created successfully",
+    "programUpdated": "Training program updated successfully",
+    "mesocycleAdded": "Mesocycle added successfully",
+    "microcycleAdded": "Microcycle added with 7 training days",
+    "dayAdded": "Training day added successfully",
+    "dayDeleted": "Training day deleted",
+    "exerciseAdded": "Exercise added successfully",
+    "exerciseUpdated": "Exercise updated",
+    "exerciseRemoved": "Exercise removed",
+    "dayEditComingSoon": "Day editing coming soon"
+  },
+  "views": {
+    "list": "List",
+    "kanban": "Kanban"
+  },
+  "days": {
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "sunday": "Sunday"
+  },
+  "tempo": {
+    "controlled": {
+      "label": "Controlled",
+      "description": "Emphasis on eccentric phase. Greater muscle damage and fiber activation."
+    },
+    "explosive": {
+      "label": "Explosive",
+      "description": "Maximum speed on concentric. Ideal for power and strength."
+    },
+    "tut": {
+      "label": "Time Under Tension",
+      "description": "Maximum TUT. Excellent for hypertrophy and mind-muscle connection."
+    },
+    "standard": {
+      "label": "Standard",
+      "description": "Balanced rhythm. Good for general work."
+    },
+    "pause_rep": {
+      "label": "Pause Rep",
+      "description": "Pause at maximum tension point. Eliminates bounce and increases difficulty."
+    }
+  },
+  "setTypes": {
+    "straight": {
+      "label": "Straight Set",
+      "description": "Standard sets with full rest between each one."
+    },
+    "rest_pause": {
+      "label": "Rest-Pause",
+      "description": "Brief pauses (10-15s) to extend the set. Greater effective volume."
+    },
+    "drop_set": {
+      "label": "Drop Set",
+      "description": "Weight reduction without rest. Maximum muscle fatigue."
+    },
+    "top_set": {
+      "label": "Top Set",
+      "description": "Main set with maximum effort. Base for calculating backoffs."
+    },
+    "backoff": {
+      "label": "Backoff Set",
+      "description": "Unloading sets with less weight. Additional volume post-top set."
+    },
+    "myo_reps": {
+      "label": "Myo-Reps",
+      "description": "Activation set + mini-sets. High time efficiency."
+    },
+    "cluster": {
+      "label": "Cluster Set",
+      "description": "Intra-set micro-pauses. Allows more reps with heavy loads."
+    }
+  },
+  "configModal": {
+    "title": "Configure Exercise",
+    "anatomyOf": "Anatomy of {{name}}",
+    "sets": "Sets",
+    "minReps": "Min Reps",
+    "maxReps": "Max Reps",
+    "restSeconds": "Rest (seconds)",
+    "setType": "Set Type",
+    "availableSetTypes": "Available set types:",
+    "tempo": "Tempo (cadence)",
+    "tempoFormat": "Format: Eccentric - Pause - Concentric - Pause",
+    "tempoHelp": "Numbers indicate seconds for each phase of movement",
+    "effortType": "Effort Type",
+    "effortValue": "Value",
+    "notes": "Notes",
+    "notesPlaceholder": "Add any notes about technique, cues, or modifications...",
+    "removeExercise": "Remove Exercise",
+    "cancel": "Cancel",
+    "saveChanges": "Save Changes",
+    "confirmDelete": "Are you sure you want to remove this exercise?",
+    "cardio": {
+      "hiitMode": "HIIT - High Intensity Interval Training",
+      "lissMode": "LISS - Low Intensity Steady State",
+      "missMode": "MISS - Moderate Intensity Steady State",
+      "intervals": "Intervals",
+      "totalDuration": "Total Duration",
+      "workSeconds": "Work (sec)",
+      "restSeconds": "Rest (sec)",
+      "workRestRatio": "Work:Rest Ratio",
+      "intensityZone": "Intensity Zone",
+      "duration": "Duration",
+      "distance": "Distance (km)",
+      "calories": "Calories",
+      "optional": "Optional",
+      "lissRecommendation": "LISS recommended: Zone 1-2",
+      "missRecommendation": "MISS recommended: Zone 2-3",
+      "notesPlaceholderHiit": "Ex: Bike sprints, burpees...",
+      "notesPlaceholderSteady": "Ex: Treadmill walk, stationary bike...",
+      "zones": {
+        "recovery": "Recovery",
+        "endurance": "Endurance",
+        "aerobic": "Aerobic",
+        "threshold": "Threshold",
+        "maximal": "Maximal"
+      }
+    }
+  },
+  "library": {
+    "title": "Library",
+    "dragSubtitle": "Drag exercises",
+    "searchPlaceholder": "Search exercises...",
+    "filters": "Filters",
+    "muscleGroup": "Muscle Group",
+    "clearFilters": "Clear filters",
+    "exerciseCount_one": "{{count}} exercise",
+    "exerciseCount_other": "{{count}} exercises",
+    "filtered": "Filtered",
+    "noExercisesFound": "No exercises found",
+    "dragToColumns": "Drag exercises to columns",
+    "allMuscles": "All"
+  },
+  "pdf": {
+    "client": "Client",
+    "printed": "Printed",
+    "week": "Week",
+    "day": "Day",
+    "focus": "Focus",
+    "datePerformed": "Date performed",
+    "dayNotes": "Day notes",
+    "restDay": "Rest Day",
+    "noExercises": "No exercises planned",
+    "warmup": "Warm-up",
+    "mainWorkout": "Main Workout",
+    "cooldown": "Cool-down",
+    "exercise": "Exercise",
+    "type": "Type",
+    "sets": "Sets",
+    "reps": "Reps",
+    "intensity": "Intensity",
+    "rest": "Rest",
+    "tempo": "Tempo",
+    "page": "Page",
+    "of": "of",
+    "generatedWith": "Generated with FitPilot",
+    "generalRecommendations": "General Recommendations",
+    "setTypes": {
+      "straight": "Straight",
+      "rest_pause": "Rest Pause",
+      "drop_set": "Drop Set",
+      "top_set": "Top Set",
+      "backoff": "Backoff",
+      "myo_reps": "Myo Reps",
+      "cluster": "Cluster"
+    },
+    "recommendations": {
+      "rir": {
+        "title": "RIR (Reps in Reserve)",
+        "text": "Number of repetitions you could have performed with good technique before reaching muscular failure. RIR 2 means you could have done 2 more."
+      },
+      "rpe": {
+        "title": "RPE (Rate of Perceived Exertion)",
+        "text": "Scale from 1 to 10. 10 is maximum effort (failure), 9 is one rep in reserve, 8 is two, etc."
+      },
+      "warmupSets": {
+        "title": "Warm-up Sets",
+        "text": "Perform 1-2 light sets before the effective sets of the first exercise of each muscle group."
+      },
+      "rest": {
+        "title": "Rest",
+        "text": "Respect the indicated rest times to ensure nervous system and muscular recovery."
+      },
+      "tempo": {
+        "title": "Tempo",
+        "text": "Execution speed. Example \"3010\": 3s down, 0s pause at bottom, 1s up, 0s pause at top."
+      },
+      "progression": {
+        "title": "Progression",
+        "text": "Try to improve in weight, repetitions, or technique in every session."
+      }
+    }
+  }
+}

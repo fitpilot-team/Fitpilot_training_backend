@@ -1,0 +1,283 @@
+{
+  "title": "AI Routine Generator",
+  "subtitle": "Create personalized training programs",
+
+  "page": {
+    "accessRestricted": "Restricted Access",
+    "trainersOnly": "Only trainers can generate training programs.",
+    "backToDashboard": "Back to Dashboard",
+    "client": "Client",
+    "selectClient": "Select client",
+    "testUser": "Myself (for testing)",
+    "createInMinutes": "Create a personalized program in minutes",
+    "answerQuestionnaire": "Answer the questionnaire and our AI will create a complete training program tailored to your client's goals, availability, and equipment.",
+    "selectClientFirst": "Select a client at the top before starting the questionnaire."
+  },
+
+  "wizard": {
+    "generateProgram": "Generate Program",
+    "previous": "Previous",
+    "next": "Next"
+  },
+
+  "steps": {
+    "profile": "Profile",
+    "goals": "Goals",
+    "availability": "Availability",
+    "equipment": "Equipment",
+    "restrictions": "Restrictions",
+    "preferences": "Preferences"
+  },
+
+  "profile": {
+    "title": "Personal Profile",
+    "subtitle": "Tell us about yourself to personalize your training program.",
+    "fitnessLevel": "Fitness level",
+    "fitnessLevelRequired": "Fitness level *",
+    "age": "Age",
+    "agePlaceholder": "E.g.: 28",
+    "gender": "Gender",
+    "genderSelect": "Select",
+    "weight": "Weight (kg)",
+    "weightPlaceholder": "E.g.: 75",
+    "height": "Height (cm)",
+    "heightPlaceholder": "E.g.: 175",
+    "experience": "Months of training experience",
+    "experiencePlaceholder": "E.g.: 24",
+    "experienceHelp": "Include all your regular weight training time"
+  },
+
+  "fitnessLevels": {
+    "beginner": "Beginner",
+    "beginnerDesc": "Less than 1 year of regular training",
+    "intermediate": "Intermediate",
+    "intermediateDesc": "1-3 years of regular training",
+    "advanced": "Advanced",
+    "advancedDesc": "More than 3 years of regular training"
+  },
+
+  "genders": {
+    "male": "Male",
+    "female": "Female",
+    "other": "Other"
+  },
+
+  "goals": {
+    "title": "Training Goals",
+    "subtitle": "Define what you want to achieve with your training program.",
+    "primary": "Primary goal *",
+    "secondary": "Secondary Goals",
+    "muscleGroupsLabel": "Muscle groups to emphasize (optional)",
+    "muscleGroupsHelp": "Select the groups you want to prioritize in your training",
+    "specificGoals": "Specific goals (optional)",
+    "specificGoalsPlaceholder": "E.g.: Increase my bench press to 100kg, improve arm definition, correct muscle imbalances...",
+    "specificGoalsHelp": "Separate each goal with a comma",
+    "options": {
+      "hypertrophy": "Build muscle mass",
+      "hypertrophyDesc": "Maximize muscle growth",
+      "strength": "Increase strength",
+      "strengthDesc": "Improve maximum strength",
+      "power": "Improve power",
+      "powerDesc": "Develop explosiveness and speed",
+      "endurance": "Muscular endurance",
+      "enduranceDesc": "Improve endurance and stamina",
+      "fat_loss": "Lose fat",
+      "fat_lossDesc": "Reduce body fat while maintaining muscle",
+      "general_fitness": "General fitness",
+      "general_fitnessDesc": "Improve overall health and fitness"
+    }
+  },
+
+  "muscleGroups": {
+    "chest": "Chest",
+    "back": "Back",
+    "shoulders": "Shoulders",
+    "arms": "Arms",
+    "legs": "Legs",
+    "core": "Core"
+  },
+
+  "availability": {
+    "title": "Availability",
+    "subtitle": "Tell us how much time you can dedicate to training.",
+    "daysPerWeek": "Days per week *",
+    "daysMin": "1 day",
+    "daysMax": "7 days",
+    "sessionDuration": "Duration of each session (minutes) *",
+    "durationMin": "20 min",
+    "durationMax": "120 min",
+    "preferredDays": "Preferred days (optional)",
+    "preferredDaysHelp": "Select the days you prefer to train",
+    "daysSelected": "{{count}} days selected",
+    "summary": "Summary",
+    "summaryText": "You will train <strong>{{days}} days</strong> per week, with sessions of approximately <strong>{{duration}} minutes</strong> each.",
+    "highFrequencyWarning": "Note: With 5+ training days, it's important to ensure adequate recovery."
+  },
+
+  "days": {
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "sunday": "Sunday",
+    "mondayShort": "M",
+    "tuesdayShort": "T",
+    "wednesdayShort": "W",
+    "thursdayShort": "T",
+    "fridayShort": "F",
+    "saturdayShort": "S",
+    "sundayShort": "S"
+  },
+
+  "equipment": {
+    "title": "Available Equipment",
+    "subtitle": "Indicate what equipment you have available for training.",
+    "gymAccess": "Do you have access to a gym? *",
+    "hasGym": "Yes, I have a gym",
+    "noGym": "No, I train at home",
+    "availableEquipment": "Available equipment *",
+    "availableEquipmentHelp": "Select all equipment you can use",
+    "notes": "Additional notes (optional)",
+    "notesPlaceholder": "E.g.: I only have dumbbells up to 20kg, my bench is not adjustable...",
+    "selectedCount": "Equipment selected: {{count}}",
+    "options": {
+      "barbell": "Olympic barbell",
+      "barbellDesc": "Straight bar with plates",
+      "dumbbells": "Dumbbells",
+      "dumbbellsDesc": "Adjustable or fixed dumbbells",
+      "cables": "Pulleys/Cables",
+      "cablesDesc": "Cable machines",
+      "machines": "Machines",
+      "machinesDesc": "Gym machines",
+      "kettlebells": "Kettlebells",
+      "kettlebellsDesc": "Russian weights",
+      "resistance_bands": "Resistance bands",
+      "resistance_bandsDesc": "Elastic resistance bands",
+      "pull_up_bar": "Pull-up bar",
+      "pull_up_barDesc": "For pull-ups and hangs",
+      "bench": "Bench",
+      "benchDesc": "Flat or adjustable bench",
+      "squat_rack": "Squat rack",
+      "squat_rackDesc": "For squats and presses",
+      "bodyweight": "Bodyweight",
+      "bodyweightDesc": "No equipment"
+    }
+  },
+
+  "restrictions": {
+    "title": "Restrictions and Limitations",
+    "subtitle": "Tell us if you have any physical limitations we should consider. This information is optional but helps us create a safer program.",
+    "important": "Important",
+    "importantText": "If you have serious injuries or medical conditions, we recommend consulting with a healthcare professional before starting any training program.",
+    "injuries": "Current or past injuries",
+    "injuriesPlaceholder": "E.g.: Left knee pain, L5 disc herniation, right shoulder tendinitis...",
+    "injuriesHelp": "Separate each injury with a comma",
+    "excludedExercises": "Exercises you want to avoid",
+    "excludedExercisesPlaceholder": "E.g.: Back squat, conventional deadlift, military press...",
+    "excludedExercisesHelp": "Exercises that cause discomfort or you simply don't want to do",
+    "medical": "Relevant medical conditions",
+    "medicalPlaceholder": "E.g.: Hypertension, type 2 diabetes, heart problems...",
+    "mobility": "Mobility limitations",
+    "mobilityPlaceholder": "E.g.: Cannot raise arms above head, limited hip mobility...",
+    "summary": "Summary",
+    "summaryText": "We have noted your restrictions. The program will adapt to avoid exercises that may cause you problems and will adjust to your mobility limitations."
+  },
+
+  "preferences": {
+    "title": "Preferences and Duration",
+    "subtitle": "Customize your program and define how long it will last.",
+    "exerciseVariety": "Exercise variety",
+    "trainingStyle": "Preferred training style",
+    "additionalOptions": "Additional options",
+    "includeWarmup": "Include recommended warm-up",
+    "includeCardio": "Include cardio sessions",
+    "includeDeload": "Include deload weeks",
+    "programDuration": "Program Duration",
+    "totalWeeks": "Total duration (weeks) *",
+    "mesocycleWeeks": "Duration of each block",
+    "startDate": "Start date *",
+    "programSummary": "Your program summary",
+    "durationSummary": "Duration: <strong>{{weeks}} weeks</strong> in <strong>{{blocks}}</strong> block(s)",
+    "startSummary": "Start: <strong>{{date}}</strong>",
+    "deloadIncluded": "Will include deload weeks for recovery",
+    "deloadNotIncluded": "No deload weeks scheduled",
+    "variety": {
+      "low": "Low",
+      "lowDesc": "Same basic exercises each week, easy to follow",
+      "medium": "Medium",
+      "mediumDesc": "Moderate variety, balance between consistency and novelty",
+      "high": "High",
+      "highDesc": "Maximum variety, different exercises frequently"
+    },
+    "trainingStyles": {
+      "auto": "Let the AI decide",
+      "push_pull_legs": "Push/Pull/Legs",
+      "upper_lower": "Upper/Lower",
+      "full_body": "Full Body",
+      "bro_split": "Bro Split (1 muscle per day)"
+    }
+  },
+
+  "generation": {
+    "generating": "Generating your personalized training program...",
+    "timeWarning": "This may take up to 2 minutes. We are analyzing your goals and creating an optimized program for you.",
+    "saving": "Saving your program...",
+    "savingDescription": "We are saving your program to the database. You will be redirected to the editor shortly.",
+    "savingProgram": "Saving to database",
+    "analyzing": "Analyzing profile and goals",
+    "selecting": "Selecting optimal exercises",
+    "structuring": "Structuring periodization",
+    "calculating": "Calculating volume and intensity",
+    "success": "Program generated successfully!",
+    "error": "Error generating program"
+  },
+
+  "preview": {
+    "title": "Program Preview",
+    "blocks": "blocks",
+    "weeks": "weeks",
+    "warnings": "Warnings",
+    "whyThisProgram": "Why this program",
+    "progressionStrategy": "Progression strategy",
+    "tips": "Tips",
+    "programStructure": "Program Structure",
+    "block": "Block",
+    "restDay": "Rest day",
+    "exercises": "exercises",
+    "exercise": "Exercise",
+    "sets": "Sets",
+    "reps": "Reps",
+    "rir": "RIR",
+    "rest": "Rest",
+    "regenerate": "Regenerate",
+    "save": "Save Program",
+    "saving": "Saving..."
+  },
+
+  "quickConfig": {
+    "title": "Quick Configuration",
+    "subtitle": "{{name}}'s data is already loaded. Just configure the program duration.",
+    "clientSummary": "Client summary",
+    "level": "Level",
+    "goal": "Goal",
+    "daysPerWeek": "Days/week",
+    "equipment": "Equipment",
+    "gymAccess": "Gym access",
+    "homeTraining": "Home training",
+    "editClientData": "Edit client data",
+    "programConfig": "Program configuration",
+    "generateProgram": "Generate Program",
+    "mesocycleInfo": "This will create {{blocks}} block(s) of {{weeks}} weeks"
+  },
+
+  "errors": {
+    "selectClient": "Please select a client"
+  },
+
+  "messages": {
+    "programSaved": "Program saved successfully",
+    "generatedBy": "AI Generated Program"
+  }
+}

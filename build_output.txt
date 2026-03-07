@@ -1,0 +1,5 @@
+
+> fit-pilot-frontend@1.0.0 build
+> tsc && vite build
+
+src/services/auth.ts(1,1): error TS6133: 'apiClient' is declared but its value is never read.
