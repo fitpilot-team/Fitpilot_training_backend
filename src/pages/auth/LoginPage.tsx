@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Mail, Lock, Zap, Timer } from 'lucide-react';
-import logo from '@/assets/fitpilot-logo.svg';
+import logo from '@/assets/FitPilot-Logo.svg';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/newAuthStore';
 import { loginSchema, LoginFormData } from '../../utils/validation';
@@ -73,46 +73,46 @@ export function LoginPage() {
                 {/* Central Visual */}
                 <div className="relative z-10 flex-1 flex items-center justify-center my-8">
                     <div className="relative w-64 h-64">
-                         {/* Circle container */}
+                        {/* Circle container */}
                         <div className="absolute inset-0 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm flex items-center justify-center">
-                             {/* Stats illustration */}
-                             <div className="flex items-end gap-2 h-24">
-                                <motion.div 
+                            {/* Stats illustration */}
+                            <div className="flex items-end gap-2 h-24">
+                                <motion.div
                                     className="w-6 bg-white rounded-t-sm"
                                     initial={{ height: 0 }}
                                     animate={{ height: "60%" }}
                                     transition={{ duration: 1, delay: 0.2 }}
                                 />
-                                <motion.div 
+                                <motion.div
                                     className="w-6 bg-white rounded-t-sm"
                                     initial={{ height: 0 }}
                                     animate={{ height: "100%" }}
                                     transition={{ duration: 1, delay: 0.4 }}
                                 />
-                                <motion.div 
+                                <motion.div
                                     className="w-6 bg-white rounded-t-sm"
                                     initial={{ height: 0 }}
                                     animate={{ height: "40%" }}
                                     transition={{ duration: 1, delay: 0.6 }}
                                 />
-                             </div>
+                            </div>
                         </div>
 
                         {/* Floating elements */}
-                        <motion.div 
+                        <motion.div
                             className="absolute -right-4 top-10 p-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 shadow-xl"
                             animate={{ y: [0, -10, 0] }}
                             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                         >
                             <Timer className="w-6 h-6 text-white" />
                         </motion.div>
-                        
-                        <motion.div 
+
+                        <motion.div
                             className="absolute -left-4 bottom-10 p-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 shadow-xl"
                             animate={{ y: [0, 10, 0] }}
                             transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
                         >
-                             <Zap className="w-6 h-6 text-white" />
+                            <Zap className="w-6 h-6 text-white" />
                         </motion.div>
                     </div>
                 </div>
@@ -138,7 +138,7 @@ export function LoginPage() {
                     </div>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                        <Input 
+                        <Input
                             label={t('pages.login.identifierLabel')}
                             placeholder={t('pages.login.identifierPlaceholder')}
                             type="text"
@@ -146,9 +146,9 @@ export function LoginPage() {
                             error={translateError(errors.identifier?.message)}
                             {...register('identifier')}
                         />
-                        
+
                         <div className="space-y-1">
-                            <Input 
+                            <Input
                                 label={t('pages.login.passwordLabel')}
                                 placeholder={t('pages.login.passwordPlaceholder')}
                                 type="password"
@@ -171,8 +171,8 @@ export function LoginPage() {
                             </div>
                         )}
 
-                        <Button 
-                            type="submit" 
+                        <Button
+                            type="submit"
                             className="w-full !bg-none !bg-[#67B5DE] hover:!bg-[#4FA5D2] focus:!ring-[#67B5DE] !shadow-[#67B5DE]/25 hover:!shadow-[#67B5DE]/35"
                             isLoading={isLoading}
                         >
