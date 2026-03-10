@@ -3,7 +3,7 @@ name: Backend Deploy
 on:
   push:
     branches:
-      - development
+      # - development
       - feature/clean-backend
       # - main
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    environment: ${{ github.ref_name == 'development' && 'development' || 'production' }}
+    environment: production
 
     outputs:
       ghcr_owner: ${{ steps.meta.outputs.ghcr_owner }}
@@ -37,19 +37,18 @@ jobs:
           GHCR_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           IMAGE_NAME="ghcr.io/$GHCR_OWNER/fitpilot-training-backend"
 
-          if [ "${GITHUB_REF_NAME}" = "development" ]; then
-            DEPLOY_ENV="development"
-            IMAGE_TAG="development-latest"
-            APP_DIR="${{ vars.VPS_BACKEND_PATH_FEATURE || vars.VPS_BACKEND_PATH || '/opt/development/FitPilot-training-backend' }}"
-            PROJECT_NAME="${{ vars.BACKEND_COMPOSE_PROJECT_FEATURE || vars.BACKEND_COMPOSE_PROJECT || 'fitpilot-backend-feature' }}"
-          else
-            # Produccion temporal en feature/clean-backend.
-            # Cuando migres a main, solo agrega main en "on.push.branches".
-            DEPLOY_ENV="production"
-            IMAGE_TAG="production-latest"
-            APP_DIR="${{ vars.VPS_BACKEND_PATH || '/opt/FitPilot-training-backend' }}"
-            PROJECT_NAME="${{ vars.BACKEND_COMPOSE_PROJECT || 'fitpilot-backend-prod' }}"
-          fi
+          # Development temporalmente desactivado.
+          # if [ "${GITHUB_REF_NAME}" = "development" ]; then
+          #   DEPLOY_ENV="development"
+          #   IMAGE_TAG="development-latest"
+          #   APP_DIR="${{ vars.VPS_BACKEND_PATH_FEATURE || vars.VPS_BACKEND_PATH || '/opt/development/FitPilot-training-backend' }}"
+          #   PROJECT_NAME="${{ vars.BACKEND_COMPOSE_PROJECT_FEATURE || vars.BACKEND_COMPOSE_PROJECT || 'fitpilot-backend-feature' }}"
+          # else
+          DEPLOY_ENV="production"
+          IMAGE_TAG="production-latest"
+          APP_DIR="${{ vars.VPS_BACKEND_PATH || '/opt/FitPilot-training-backend' }}"
+          PROJECT_NAME="${{ vars.BACKEND_COMPOSE_PROJECT || 'fitpilot-backend-prod' }}"
+          # fi
 
           COMPOSE_FILE="${{ vars.BACKEND_COMPOSE_FILE || 'docker-compose.yml' }}"
           BACKEND_SERVICE="${{ vars.BACKEND_SERVICE_NAME || 'backend' }}"
@@ -95,7 +94,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    environment: ${{ github.ref_name == 'development' && 'development' || 'production' }}
+    environment: production
 
     steps:
       - name: Deploy on VPS (backend only, no redis restart)
