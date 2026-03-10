@@ -3,7 +3,6 @@ import { ArrowLeft, Calendar, Mail, User, X, TrendingUp, Activity, Scale, Ruler,
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import clientsData from '../../../clients.json';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 // import { useTranslation } from 'react-i18next';
 
@@ -35,6 +34,8 @@ interface Client {
     daysSinceLastLog: number;
   };
 }
+
+const fallbackClients: Client[] = [];
 
 export function NutritionClientDetailPage() {
   const { clientId } = useParams();
@@ -69,13 +70,7 @@ export function NutritionClientDetailPage() {
     .catch(error => {
       console.error('Error fetching client:', error);
       // Fallback
-      let found = null;
-      
-      if ('clients' in clientsData && Array.isArray((clientsData as any).clients)) {
-         found = (clientsData as any).clients.find((c: Client) => c.id === clientId);
-      } else if (Array.isArray(clientsData)) {
-         found = (clientsData as Client[]).find((c: Client) => c.id === clientId);
-      }
+      const found = fallbackClients.find((c) => c.id === clientId) || null;
       
       setClient(found || null);
         // Set initial tab based on service type for fallback
