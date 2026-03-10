@@ -1,0 +1,139 @@
+{
+  "locale": "es",
+  "appName": "FitPilot",
+  "appTagline": "Gestión de Entrenamientos",
+  "nav": {
+    "dashboard": "Panel",
+    "training": "Entrenamiento",
+    "clients": "Clientes",
+    "exercises": "Ejercicios",
+    "templates": "Plantillas",
+    "trainingClientPlans": "Planes Clientes",
+    "aiGenerator": "Generador IA",
+    "settings": "Configuración",
+    "nutrition": "Nutrición",
+    "nutritionClients": "Clientes",
+    "nutritionCreateDiet": "Crear nuevo plan",
+    "nutritionMealBuilder": "Constructor de Comidas",
+    "clientsMenus": "Menús Clientes",
+    "clientPlans": "Planes Clientes",
+    "agenda": "Agenda"
+  },
+  "mealPlans": {
+    "overview": "Resumen",
+    "builder": "Constructor",
+    "templates": "Plantillas"
+  },
+  "clientNav": {
+    "summary": "Resumen",
+    "interview": "Entrevista",
+    "programs": "Entrenamientos",
+    "metrics": "Métricas",
+    "diet": "Dieta"
+  },
+  "roles": {
+    "admin": "Administrador",
+    "trainer": "Entrenador",
+    "client": "Cliente"
+  },
+  "buttons": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "add": "Agregar",
+    "create": "Crear",
+    "update": "Actualizar",
+    "close": "Cerrar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "confirm": "Confirmar",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "clearFilters": "Limpiar filtros",
+    "export": "Exportar",
+    "import": "Importar",
+    "refresh": "Actualizar",
+    "view": "Ver",
+    "viewDetails": "Ver Detalles"
+  },
+  "status": {
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "draft": "Borrador",
+    "completed": "Completado",
+    "archived": "Archivado",
+    "verified": "Verificado"
+  },
+  "language": {
+    "es": "Español",
+    "en": "English",
+    "select": "Seleccionar idioma"
+  },
+  "pagination": {
+    "showing": "Mostrando",
+    "of": "de",
+    "results": "resultados",
+    "page": "Página",
+    "perPage": "Por página"
+  },
+  "confirmation": {
+    "deleteTitle": "Confirmar eliminación",
+    "deleteMessage": "¿Estás seguro de que deseas eliminar este elemento?",
+    "cannotUndo": "Esta acción no se puede deshacer."
+  },
+  "messages": {
+    "success": "Operación exitosa",
+    "error": "Ha ocurrido un error",
+    "saved": "Guardado correctamente",
+    "deleted": "Eliminado correctamente",
+    "updated": "Actualizado correctamente",
+    "created": "Creado correctamente"
+  },
+  "empty": {
+    "noData": "No hay datos disponibles",
+    "noResults": "No se encontraron resultados"
+  },
+  "time": {
+    "seconds": "segundos",
+    "minutes": "minutos",
+    "hours": "horas",
+    "days": "días",
+    "weeks": "semanas"
+  },
+  "dashboard": {
+    "welcome": "¡Bienvenido de nuevo, {{name}}!",
+    "subtitle": "Esto es lo que está pasando con tus entrenamientos hoy.",
+    "stats": {
+      "totalExercises": "Total de Ejercicios",
+      "activeMesocycles": "Mesociclos Activos",
+      "clients": "Clientes",
+      "completionRate": "Tasa de Completado"
+    },
+    "quickActions": "Acciones Rápidas",
+    "browseExercises": "Ver Ejercicios",
+    "createMesocycle": "Crear Mesociclo",
+    "manageClients": "Gestionar Clientes",
+    "recentActivity": "Actividad Reciente",
+    "noActivity": "No hay actividad reciente para mostrar",
+    "startCreating": "Comienza a crear mesociclos para ver tu actividad aquí"
+  },
+  "metrics": {
+    "title": "Métricas del Microciclo",
+    "week": "Semana",
+    "countSecondaryMuscles": "Contar músculos secundarios (0.5x)",
+    "volumeLevels": {
+      "maintenance": "Mantenimiento",
+      "suboptimal": "Subóptimo",
+      "optimal": "Óptimo",
+      "overreaching": "Cerca del MRV",
+      "excessive": "Excesivo"
+    },
+    "landmarks": {
+      "mev": "Volumen Efectivo Mínimo",
+      "mav": "Volumen Adaptativo Máximo",
+      "mrv": "Volumen Recuperable Máximo"
+    }
+  }
+}

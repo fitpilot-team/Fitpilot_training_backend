@@ -1,26 +1,26 @@
-FROM python:3.11-slim
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+ARG VITE_NUTRITION_API_URL=https://nutrition-api.fitpilot.fit
+ARG VITE_TRAINING_API_URL=http://localhost:3000
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV VITE_NUTRITION_API_URL=$VITE_NUTRITION_API_URL
+ENV VITE_TRAINING_API_URL=$VITE_TRAINING_API_URL
 
-# Copy application code
+COPY package*.json ./
+
+RUN npm ci
+
 COPY . .
 
-# Create static directories with proper permissions
-RUN mkdir -p /app/static/exercises /app/static/profiles /app/static/videos && \
-    chmod -R 777 /app/static
+RUN npm run build
 
-# Expose port
-EXPOSE 8000
+FROM nginx:alpine
 
-# Run the application
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

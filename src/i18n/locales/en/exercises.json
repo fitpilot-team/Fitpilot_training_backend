@@ -1,0 +1,147 @@
+{
+  "title": "Exercise Library",
+  "subtitle": "{{count}} exercises available",
+  "newExercise": "New Exercise",
+  "addExercise": "Add Exercise",
+  "editExercise": "Edit Exercise",
+  "deleteExercise": "Delete Exercise",
+  "searchPlaceholder": "Search exercises...",
+  "noExercises": "No exercises registered",
+  "noExercisesFound": "No exercises found",
+  "adjustFilters": "Try adjusting the search filters",
+  "addFirst": "Add your first exercise",
+  "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+  "fetchMovementImage": "Fetch Movement Image",
+  "fetchMovementImageHelp": "Automatically searches for an exercise image from Wger.de (exercise database).",
+
+  "fields": {
+    "name": "Name",
+    "description": "Description",
+    "muscleGroup": "Muscle Group",
+    "exerciseType": "Exercise Type",
+    "difficulty": "Difficulty",
+    "resistanceProfile": "Resistance Profile",
+    "category": "Category",
+    "equipment": "Equipment",
+    "instructions": "Instructions",
+    "videoUrl": "Video URL",
+    "image": "Exercise image",
+    "exerciseClass": "Exercise Classification",
+    "cardioSubclass": "Cardio Type",
+    "intensityZone": "Intensity Zone",
+    "targetHeartRateMin": "Min HR (BPM)",
+    "targetHeartRateMax": "Max HR (BPM)",
+    "caloriesPerMinute": "Calories/min",
+    "filterMusclesByCategory": "Filter muscles by category",
+    "primaryMuscles": "Primary Muscles",
+    "secondaryMuscles": "Secondary Muscles (optional)",
+    "secondaryMusclesHelp": "Secondary muscles count as 0.5 effective sets"
+  },
+
+  "exerciseClasses": {
+    "strength": "Strength",
+    "cardio": "Cardio",
+    "plyometric": "Plyometric",
+    "flexibility": "Flexibility",
+    "mobility": "Mobility",
+    "warmup": "Warm-up",
+    "conditioning": "Conditioning",
+    "balance": "Balance"
+  },
+
+  "cardioSubclasses": {
+    "liss": "LISS (Low Intensity)",
+    "hiit": "HIIT (High Intensity)",
+    "miss": "MISS (Moderate Intensity)"
+  },
+
+  "intensityZones": {
+    "zone1": "Zone 1 - Recovery (50-60%)",
+    "zone2": "Zone 2 - Aerobic Base (60-70%)",
+    "zone3": "Zone 3 - Aerobic Tempo (70-80%)",
+    "zone4": "Zone 4 - Anaerobic Threshold (80-90%)",
+    "zone5": "Zone 5 - Maximum Effort (90-100%)"
+  },
+
+  "placeholders": {
+    "name": "e.g., Bench Press",
+    "category": "e.g., Press, Row, Curl",
+    "equipment": "e.g., Barbell, Dumbbells",
+    "description": "Exercise description..."
+  },
+
+  "muscleGroups": {
+    "chest": "Chest",
+    "upper_back": "Upper Back",
+    "lats": "Lats",
+    "lower_back": "Lower Back",
+    "anterior_deltoid": "Anterior Deltoid",
+    "lateral_deltoid": "Lateral Deltoid",
+    "posterior_deltoid": "Posterior Deltoid",
+    "biceps": "Biceps",
+    "triceps": "Triceps",
+    "forearms": "Forearms",
+    "quadriceps": "Quadriceps",
+    "hamstrings": "Hamstrings",
+    "glutes": "Glutes",
+    "calves": "Calves",
+    "abs": "Abs",
+    "obliques": "Obliques",
+    "cardio": "Cardio"
+  },
+
+  "exerciseTypes": {
+    "compound": "Compound",
+    "isolation": "Isolation",
+    "multiarticular": "Multi-Joint",
+    "monoarticular": "Single-Joint"
+  },
+
+  "difficulties": {
+    "beginner": "Beginner",
+    "intermediate": "Intermediate",
+    "advanced": "Advanced"
+  },
+
+  "resistanceProfiles": {
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "flat": "Flat",
+    "bell": "Bell"
+  },
+
+  "filters": {
+    "all": "All",
+    "allMuscleGroups": "All muscle groups",
+    "allTypes": "All types",
+    "allDifficulties": "All difficulties",
+    "allClasses": "All classifications",
+    "allSubclasses": "All cardio types",
+    "allCategories": "All categories",
+    "selectSubclass": "Select type",
+    "selectZone": "Select zone",
+    "byMuscleGroup": "By muscle group",
+    "byType": "By type",
+    "byDifficulty": "By difficulty"
+  },
+
+  "validation": {
+    "selectPrimaryMuscle": "Select at least one primary muscle"
+  },
+
+  "messages": {
+    "created": "Exercise created successfully",
+    "updated": "Exercise updated successfully",
+    "deleted": "Exercise deleted successfully",
+    "imageTooLarge": "Image is too large. Maximum allowed size is 5MB",
+    "fetchingImage": "Searching...",
+    "noImageFound": "No image found",
+    "loadError": "Error loading exercises",
+    "deleteError": "Error deleting exercise",
+    "uploadError": "Error uploading image",
+    "saveError": "Error saving exercise",
+    "fetchImageError": "Error fetching movement image",
+    "loadingMuscles": "Loading muscles...",
+    "noMusclesRequired": "This exercise type does not require specifying target muscles. Cardio, flexibility, mobility, warm-up, conditioning and balance exercises focus on whole-body movement."
+  }
+}
