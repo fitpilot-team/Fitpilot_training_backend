@@ -1,0 +1,166 @@
+name: Frontend CI
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "20"
+  VITE_NUTRITION_API_URL: ${{ vars.VITE_NUTRITION_API_URL || 'https://nutrition-api.fitpilot.fit' }}
+  VITE_TRAINING_API_URL: ${{ vars.VITE_TRAINING_API_URL || 'http://localhost:3000' }}
+
+jobs:
+  build:
+    name: Build App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set deploy metadata
+        id: meta
+        run: |
+          GHCR_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            DEPLOY_ENV="production"
+            FRONTEND_PORT="4000"
+            APP_DIR="${{ vars.VPS_FRONTEND_PATH || '/opt/FitPilot-frontend' }}"
+          else
+            DEPLOY_ENV="development"
+            FRONTEND_PORT="6000"
+            APP_DIR="${{ vars.VPS_FRONTEND_PATH_DEV || vars.VPS_FRONTEND_PATH || '/opt/development/FitPilot-frontend' }}"
+          fi
+
+          echo "ghcr_owner=$GHCR_OWNER" >> "$GITHUB_OUTPUT"
+          echo "image_name=ghcr.io/$GHCR_OWNER/fitpilot-frontend" >> "$GITHUB_OUTPUT"
+          echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "frontend_port=$FRONTEND_PORT" >> "$GITHUB_OUTPUT"
+          echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$DEPLOY_ENV-latest" >> "$GITHUB_OUTPUT"
+          echo "container_name=fitpilot-frontend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "project_name=fitpilot-frontend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ steps.meta.outputs.ghcr_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push (frontend image)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.ghcr_owner }}/fitpilot-frontend:${{ steps.meta.outputs.image_tag }}
+            ghcr.io/${{ steps.meta.outputs.ghcr_owner }}/fitpilot-frontend:${{ github.sha }}
+          build-args: |
+            VITE_NUTRITION_API_URL=${{ env.VITE_NUTRITION_API_URL }}
+            VITE_TRAINING_API_URL=${{ env.VITE_TRAINING_API_URL }}
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: docker
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref_name == 'main' || github.ref_name == 'development')
+    permissions:
+      contents: read
+      packages: read
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      - name: Set deploy metadata (again, for this job)
+        id: meta
+        run: |
+          GHCR_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            DEPLOY_ENV="production"
+            FRONTEND_PORT="4000"
+            APP_DIR="${{ vars.VPS_FRONTEND_PATH || '/opt/FitPilot-frontend' }}"
+          else
+            DEPLOY_ENV="development"
+            FRONTEND_PORT="6000"
+            APP_DIR="${{ vars.VPS_FRONTEND_PATH_DEV || vars.VPS_FRONTEND_PATH || '/opt/development/FitPilot-frontend' }}"
+          fi
+
+          echo "ghcr_owner=$GHCR_OWNER" >> "$GITHUB_OUTPUT"
+          echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "frontend_port=$FRONTEND_PORT" >> "$GITHUB_OUTPUT"
+          echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$DEPLOY_ENV-latest" >> "$GITHUB_OUTPUT"
+          echo "container_name=fitpilot-frontend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "project_name=fitpilot-frontend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_OWNER: ${{ steps.meta.outputs.ghcr_owner }}
+          GHCR_USER: ${{ steps.meta.outputs.ghcr_owner }}
+          APP_DIR: ${{ steps.meta.outputs.app_dir }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          CONTAINER_NAME: ${{ steps.meta.outputs.container_name }}
+          NODE_ENV: ${{ steps.meta.outputs.deploy_env }}
+          FRONTEND_PORT: ${{ steps.meta.outputs.frontend_port }}
+          PROJECT_NAME: ${{ steps.meta.outputs.project_name }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true
+          envs: GHCR_TOKEN,GHCR_OWNER,GHCR_USER,APP_DIR,IMAGE_TAG,CONTAINER_NAME,NODE_ENV,FRONTEND_PORT,PROJECT_NAME
+          script: |
+            set -e
+            if [ -z "$GHCR_TOKEN" ] || [ -z "$GHCR_USER" ]; then
+              echo "GHCR_TOKEN o GHCR_USER vacio. Revisa secrets del environment."
+              exit 1
+            fi
+            cd "$APP_DIR"
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            GHCR_OWNER="$GHCR_OWNER" IMAGE_TAG="$IMAGE_TAG" CONTAINER_NAME="$CONTAINER_NAME" NODE_ENV="$NODE_ENV" FRONTEND_PORT="$FRONTEND_PORT" docker compose -p "$PROJECT_NAME" pull
+            docker rm -f "$CONTAINER_NAME" || true
+            GHCR_OWNER="$GHCR_OWNER" IMAGE_TAG="$IMAGE_TAG" CONTAINER_NAME="$CONTAINER_NAME" NODE_ENV="$NODE_ENV" FRONTEND_PORT="$FRONTEND_PORT" docker compose -p "$PROJECT_NAME" up -d
+            docker image prune -f
+            GHCR_OWNER="$GHCR_OWNER" IMAGE_TAG="$IMAGE_TAG" CONTAINER_NAME="$CONTAINER_NAME" NODE_ENV="$NODE_ENV" FRONTEND_PORT="$FRONTEND_PORT" docker compose -p "$PROJECT_NAME" ps

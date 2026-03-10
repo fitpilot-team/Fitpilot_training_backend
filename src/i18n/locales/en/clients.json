@@ -1,0 +1,89 @@
+{
+  "title": "Clients",
+  "subtitle": "Select a client to view their workspace and manage their training",
+  "newClient": "New Client",
+  "addNewClient": "Add New Client",
+  "createClient": "Create Client",
+  "addFirst": "Add First Client",
+  "noClients": "No Clients Yet",
+  "noClientsFound": "No Clients Found",
+  "noClientsDescription": "Get started by adding your first client. Training programs you create will be automatically linked to your selected client.",
+  "adjustSearch": "Try adjusting your search terms.",
+  "searchPlaceholder": "Search clients by name or email...",
+  "clickToOpen": "Click to open workspace",
+  "joined": "Joined",
+  "confirmDelete": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+
+  "overview": {
+    "title": "Client Overview",
+    "quickAccess": "Quick Access",
+    "activeClient": "Active Client",
+    "inactiveClient": "Inactive Client"
+  },
+
+  "sections": {
+    "interview": "Interview",
+    "programs": "Training Programs",
+    "metrics": "Metrics",
+    "diet": "Diet Plans"
+  },
+
+  "fields": {
+    "fullName": "Full Name",
+    "email": "Email",
+    "phone": "Phone",
+    "birthDate": "Birth Date",
+    "gender": "Gender",
+    "status": "Status",
+    "password": "Password"
+  },
+
+  "placeholders": {
+    "fullName": "John Doe",
+    "email": "john@example.com",
+    "password": "Min. 6 characters"
+  },
+
+  "helperText": {
+    "password": "This will be the client's login password"
+  },
+
+  "validation": {
+    "nameRequired": "Name is required",
+    "emailRequired": "Email is required",
+    "emailInvalid": "Invalid email format",
+    "passwordRequired": "Password is required",
+    "passwordLength": "Password must be at least 6 characters"
+  },
+
+  "gender": {
+    "male": "Male",
+    "female": "Female",
+    "other": "Other"
+  },
+
+  "interview": {
+    "title": "Initial Interview",
+    "goals": "Goals",
+    "experience": "Experience",
+    "limitations": "Limitations",
+    "availability": "Availability",
+    "notes": "Additional notes"
+  },
+
+  "metrics": {
+    "title": "Metrics",
+    "weight": "Weight",
+    "height": "Height",
+    "bodyFat": "Body Fat %",
+    "muscleMass": "Muscle Mass"
+  },
+
+  "messages": {
+    "created": "Client created successfully",
+    "updated": "Client updated successfully",
+    "deleted": "Client deleted successfully",
+    "createFailed": "Failed to create client",
+    "deleteFailed": "Failed to delete client"
+  }
+}

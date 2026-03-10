@@ -1,0 +1,147 @@
+{
+  "title": "Biblioteca de Ejercicios",
+  "subtitle": "{{count}} ejercicios disponibles",
+  "newExercise": "Nuevo Ejercicio",
+  "addExercise": "Agregar Ejercicio",
+  "editExercise": "Editar Ejercicio",
+  "deleteExercise": "Eliminar Ejercicio",
+  "searchPlaceholder": "Buscar ejercicios...",
+  "noExercises": "No hay ejercicios registrados",
+  "noExercisesFound": "No se encontraron ejercicios",
+  "adjustFilters": "Intenta ajustar los filtros de búsqueda",
+  "addFirst": "Agrega tu primer ejercicio",
+  "confirmDeleteMessage": "¿Estás seguro de eliminar \"{{name}}\"? Esta acción no se puede deshacer.",
+  "fetchMovementImage": "Obtener Imagen de Movimiento",
+  "fetchMovementImageHelp": "Busca automáticamente una imagen del ejercicio desde Wger.de (base de datos de ejercicios).",
+
+  "fields": {
+    "name": "Nombre",
+    "description": "Descripción",
+    "muscleGroup": "Grupo Muscular",
+    "exerciseType": "Tipo de Ejercicio",
+    "difficulty": "Dificultad",
+    "resistanceProfile": "Perfil de Resistencia",
+    "category": "Categoría",
+    "equipment": "Equipamiento",
+    "instructions": "Instrucciones",
+    "videoUrl": "URL del Video",
+    "image": "Imagen del ejercicio",
+    "exerciseClass": "Clasificación de Ejercicio",
+    "cardioSubclass": "Tipo de Cardio",
+    "intensityZone": "Zona de Intensidad",
+    "targetHeartRateMin": "FC Mínima (BPM)",
+    "targetHeartRateMax": "FC Máxima (BPM)",
+    "caloriesPerMinute": "Calorías/min",
+    "filterMusclesByCategory": "Filtrar músculos por categoría",
+    "primaryMuscles": "Músculos Primarios",
+    "secondaryMuscles": "Músculos Secundarios (opcional)",
+    "secondaryMusclesHelp": "Los músculos secundarios cuentan como 0.5 series efectivas"
+  },
+
+  "exerciseClasses": {
+    "strength": "Fuerza",
+    "cardio": "Cardio",
+    "plyometric": "Pliométrico",
+    "flexibility": "Flexibilidad",
+    "mobility": "Movilidad",
+    "warmup": "Calentamiento",
+    "conditioning": "Acondicionamiento",
+    "balance": "Equilibrio"
+  },
+
+  "cardioSubclasses": {
+    "liss": "LISS (Baja Intensidad)",
+    "hiit": "HIIT (Alta Intensidad)",
+    "miss": "MISS (Intensidad Media)"
+  },
+
+  "intensityZones": {
+    "zone1": "Zona 1 - Recuperación (50-60%)",
+    "zone2": "Zona 2 - Aeróbico Base (60-70%)",
+    "zone3": "Zona 3 - Aeróbico Tempo (70-80%)",
+    "zone4": "Zona 4 - Umbral Anaeróbico (80-90%)",
+    "zone5": "Zona 5 - Máximo Esfuerzo (90-100%)"
+  },
+
+  "placeholders": {
+    "name": "Ej: Press de Banca",
+    "category": "Ej: Press, Row, Curl",
+    "equipment": "Ej: Barra, Mancuernas",
+    "description": "Descripción del ejercicio..."
+  },
+
+  "muscleGroups": {
+    "chest": "Pecho",
+    "upper_back": "Espalda Alta",
+    "lats": "Dorsales",
+    "lower_back": "Espalda Baja",
+    "anterior_deltoid": "Deltoides Anterior",
+    "lateral_deltoid": "Deltoides Lateral",
+    "posterior_deltoid": "Deltoides Posterior",
+    "biceps": "Bíceps",
+    "triceps": "Tríceps",
+    "forearms": "Antebrazos",
+    "quadriceps": "Cuádriceps",
+    "hamstrings": "Isquiotibiales",
+    "glutes": "Glúteos",
+    "calves": "Pantorrillas",
+    "abs": "Abdominales",
+    "obliques": "Oblicuos",
+    "cardio": "Cardio"
+  },
+
+  "exerciseTypes": {
+    "compound": "Multiarticular",
+    "isolation": "Monoarticular",
+    "multiarticular": "Multiarticular",
+    "monoarticular": "Monoarticular"
+  },
+
+  "difficulties": {
+    "beginner": "Principiante",
+    "intermediate": "Intermedio",
+    "advanced": "Avanzado"
+  },
+
+  "resistanceProfiles": {
+    "ascending": "Ascendente",
+    "descending": "Descendente",
+    "flat": "Plano",
+    "bell": "Campana"
+  },
+
+  "filters": {
+    "all": "Todos",
+    "allMuscleGroups": "Todos los grupos",
+    "allTypes": "Todos los tipos",
+    "allDifficulties": "Todas las dificultades",
+    "allClasses": "Todas las clasificaciones",
+    "allSubclasses": "Todos los tipos de cardio",
+    "allCategories": "Todas las categorías",
+    "selectSubclass": "Seleccionar tipo",
+    "selectZone": "Seleccionar zona",
+    "byMuscleGroup": "Por grupo muscular",
+    "byType": "Por tipo",
+    "byDifficulty": "Por dificultad"
+  },
+
+  "validation": {
+    "selectPrimaryMuscle": "Selecciona al menos un músculo primario"
+  },
+
+  "messages": {
+    "created": "Ejercicio creado correctamente",
+    "updated": "Ejercicio actualizado correctamente",
+    "deleted": "Ejercicio eliminado correctamente",
+    "imageTooLarge": "La imagen es demasiado grande. El tamaño máximo permitido es 5MB",
+    "fetchingImage": "Buscando...",
+    "noImageFound": "No se encontró imagen",
+    "loadError": "Error al cargar los ejercicios",
+    "deleteError": "Error al eliminar el ejercicio",
+    "uploadError": "Error al subir la imagen",
+    "saveError": "Error al guardar el ejercicio",
+    "fetchImageError": "Error al obtener la imagen de movimiento",
+    "loadingMuscles": "Cargando músculos...",
+    "noMusclesRequired": "Este tipo de ejercicio no requiere especificar músculos objetivo. Los ejercicios de cardio, flexibilidad, movilidad, calentamiento, acondicionamiento y equilibrio se enfocan en el movimiento completo del cuerpo."
+  }
+}

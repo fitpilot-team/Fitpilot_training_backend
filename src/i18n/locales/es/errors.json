@@ -1,0 +1,66 @@
+{
+  "validation": {
+    "required": "Este campo es requerido",
+    "invalidEmail": "Dirección de correo inválida",
+    "passwordTooShort": "La contraseña debe tener al menos 6 caracteres",
+    "passwordMismatch": "Las contraseñas no coinciden",
+    "minLength": "Debe tener al menos {{min}} caracteres",
+    "maxLength": "No puede exceder {{max}} caracteres",
+    "invalidFormat": "Formato inválido",
+    "invalidDate": "Fecha inválida",
+    "dateRequired": "La fecha es requerida",
+    "nameRequired": "El nombre es requerido",
+    "objectiveRequired": "El objetivo es requerido",
+    "clientRequired": "El cliente es requerido"
+  },
+
+  "api": {
+    "networkError": "Error de conexión. Por favor verifica tu internet.",
+    "serverError": "Error del servidor. Por favor intenta más tarde.",
+    "unauthorized": "No autorizado. Por favor inicia sesión nuevamente.",
+    "forbidden": "No tienes permiso para realizar esta acción.",
+    "notFound": "Recurso no encontrado.",
+    "conflict": "Conflicto con datos existentes.",
+    "badRequest": "Solicitud inválida. Por favor verifica los datos.",
+    "timeout": "La solicitud tardó demasiado. Por favor intenta de nuevo."
+  },
+
+  "auth": {
+    "emailAlreadyRegistered": "Este correo ya está registrado",
+    "incorrectCredentials": "Correo o contraseña incorrectos",
+    "accountInactive": "Tu cuenta está inactiva",
+    "sessionExpired": "Tu sesión ha expirado"
+  },
+
+  "exercises": {
+    "createFailed": "Error al crear el ejercicio",
+    "updateFailed": "Error al actualizar el ejercicio",
+    "deleteFailed": "Error al eliminar el ejercicio",
+    "loadFailed": "Error al cargar los ejercicios"
+  },
+
+  "training": {
+    "saveFailed": "Error al guardar el programa de entrenamiento",
+    "loadFailed": "Error al cargar el programa",
+    "mesocycleFailed": "Error al agregar mesociclo",
+    "microcycleFailed": "Error al agregar microciclo",
+    "dayFailed": "Error al agregar día de entrenamiento",
+    "exerciseFailed": "Error al agregar ejercicio",
+    "deleteFailed": "Error al eliminar",
+    "reorderFailed": "Error al reordenar ejercicios",
+    "moveFailed": "Error al mover ejercicio"
+  },
+
+  "clients": {
+    "createFailed": "Error al crear el cliente",
+    "updateFailed": "Error al actualizar el cliente",
+    "deleteFailed": "Error al eliminar el cliente",
+    "loadFailed": "Error al cargar los clientes"
+  },
+
+  "generic": {
+    "unknownError": "Ha ocurrido un error desconocido",
+    "tryAgain": "Por favor intenta de nuevo",
+    "contactSupport": "Si el problema persiste, contacta a soporte"
+  }
+}

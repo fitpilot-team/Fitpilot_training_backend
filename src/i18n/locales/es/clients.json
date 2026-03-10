@@ -1,0 +1,89 @@
+{
+  "title": "Clientes",
+  "subtitle": "Selecciona un cliente para ver su espacio de trabajo y gestionar su entrenamiento",
+  "newClient": "Nuevo Cliente",
+  "addNewClient": "Agregar Nuevo Cliente",
+  "createClient": "Crear Cliente",
+  "addFirst": "Agregar Primer Cliente",
+  "noClients": "No hay clientes aún",
+  "noClientsFound": "No se encontraron clientes",
+  "noClientsDescription": "Comienza agregando tu primer cliente. Los programas de entrenamiento que crees se vincularán automáticamente al cliente seleccionado.",
+  "adjustSearch": "Intenta ajustar los términos de búsqueda.",
+  "searchPlaceholder": "Buscar clientes por nombre o email...",
+  "clickToOpen": "Clic para abrir espacio de trabajo",
+  "joined": "Se unió",
+  "confirmDelete": "¿Estás seguro de eliminar \"{{name}}\"? Esta acción no se puede deshacer.",
+
+  "overview": {
+    "title": "Resumen del Cliente",
+    "quickAccess": "Acceso Rápido",
+    "activeClient": "Cliente Activo",
+    "inactiveClient": "Cliente Inactivo"
+  },
+
+  "sections": {
+    "interview": "Entrevista",
+    "programs": "Programas de Entrenamiento",
+    "metrics": "Métricas",
+    "diet": "Planes de Dieta"
+  },
+
+  "fields": {
+    "fullName": "Nombre Completo",
+    "email": "Correo Electrónico",
+    "phone": "Teléfono",
+    "birthDate": "Fecha de Nacimiento",
+    "gender": "Género",
+    "status": "Estado",
+    "password": "Contraseña"
+  },
+
+  "placeholders": {
+    "fullName": "Juan Pérez",
+    "email": "juan@ejemplo.com",
+    "password": "Mín. 6 caracteres"
+  },
+
+  "helperText": {
+    "password": "Esta será la contraseña de acceso del cliente"
+  },
+
+  "validation": {
+    "nameRequired": "El nombre es requerido",
+    "emailRequired": "El email es requerido",
+    "emailInvalid": "Formato de email inválido",
+    "passwordRequired": "La contraseña es requerida",
+    "passwordLength": "La contraseña debe tener al menos 6 caracteres"
+  },
+
+  "gender": {
+    "male": "Masculino",
+    "female": "Femenino",
+    "other": "Otro"
+  },
+
+  "interview": {
+    "title": "Entrevista Inicial",
+    "goals": "Objetivos",
+    "experience": "Experiencia",
+    "limitations": "Limitaciones",
+    "availability": "Disponibilidad",
+    "notes": "Notas adicionales"
+  },
+
+  "metrics": {
+    "title": "Métricas",
+    "weight": "Peso",
+    "height": "Altura",
+    "bodyFat": "% Grasa Corporal",
+    "muscleMass": "Masa Muscular"
+  },
+
+  "messages": {
+    "created": "Cliente creado correctamente",
+    "updated": "Cliente actualizado correctamente",
+    "deleted": "Cliente eliminado correctamente",
+    "createFailed": "Error al crear el cliente",
+    "deleteFailed": "Error al eliminar el cliente"
+  }
+}
