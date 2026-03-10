@@ -26,6 +26,7 @@ Thumbs.db
 
 # Variables de entorno locales
 .env
+.env.fit-pilot10
 .env.local
 .env.development.local
 .env.test.local

@@ -1,3 +1,41 @@
+﻿## Integracion con `fit-pilot10` (Docker Compose raiz)
+
+Este backend forma parte del stack local orquestado desde:
+`C:\Users\ale_o\Fit-pilot1.0\docker-compose.yml`
+
+### Flujo recomendado
+
+1. Copiar plantilla de variables especificas de training:
+
+```bash
+cp .env.fit-pilot10.example .env.fit-pilot10
+```
+
+2. Desde la raiz del workspace:
+
+```bash
+docker compose --env-file .env.fit-pilot10 -f docker-compose.yml up -d --build training-schema-check training-backend
+```
+
+### Dependencia de auth contra Nutrition
+
+En modo integracion local:
+- `NUTRITION_API_URL=http://nutrition-backend:3000`
+- `NUTRITION_AUTH_ME_PATH=/v1/auth/me`
+
+El backend de training valida JWT emitidos por nutrition usando ese endpoint interno.
+
+### Validacion de esquema (dry-run)
+
+El servicio `training-schema-check` ejecuta:
+
+```bash
+python scripts/upgrade_training_schema_shared_db.py --dry-run --dsn "$SUPABASE_DATABASE_URL"
+```
+
+Si este check falla, `training-backend` no arranca.
+
+---
 # Fitpilot Training Backend
 
 ## Frontend source of truth
@@ -70,3 +108,5 @@ It does not delete local files.
 2. Verify frontend exercise pages and program editor load images without `/static` dependencies.
 3. Confirm no critical DB records still reference `/static/exercises/...`.
 4. Remove local media serving only after full verification in staging/production.
+
+
