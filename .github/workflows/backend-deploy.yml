@@ -1,0 +1,135 @@
+name: Backend Deploy
+
+on:
+  push:
+    branches:
+      - development
+      - feature/clean-backend
+      # - main
+  workflow_dispatch:
+
+jobs:
+  docker:
+    name: Build Docker Image (Backend)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    environment: ${{ github.ref_name == 'development' && 'development' || 'production' }}
+
+    outputs:
+      ghcr_owner: ${{ steps.meta.outputs.ghcr_owner }}
+      image_name: ${{ steps.meta.outputs.image_name }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      app_dir: ${{ steps.meta.outputs.app_dir }}
+      project_name: ${{ steps.meta.outputs.project_name }}
+      compose_file: ${{ steps.meta.outputs.compose_file }}
+      backend_service: ${{ steps.meta.outputs.backend_service }}
+      deploy_env: ${{ steps.meta.outputs.deploy_env }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set deploy metadata
+        id: meta
+        run: |
+          GHCR_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_NAME="ghcr.io/$GHCR_OWNER/fitpilot-training-backend"
+
+          if [ "${GITHUB_REF_NAME}" = "development" ]; then
+            DEPLOY_ENV="development"
+            IMAGE_TAG="development-latest"
+            APP_DIR="${{ vars.VPS_BACKEND_PATH_FEATURE || vars.VPS_BACKEND_PATH || '/opt/development/FitPilot-training-backend' }}"
+            PROJECT_NAME="${{ vars.BACKEND_COMPOSE_PROJECT_FEATURE || vars.BACKEND_COMPOSE_PROJECT || 'fitpilot-backend-feature' }}"
+          else
+            # Produccion temporal en feature/clean-backend.
+            # Cuando migres a main, solo agrega main en "on.push.branches".
+            DEPLOY_ENV="production"
+            IMAGE_TAG="production-latest"
+            APP_DIR="${{ vars.VPS_BACKEND_PATH || '/opt/FitPilot-training-backend' }}"
+            PROJECT_NAME="${{ vars.BACKEND_COMPOSE_PROJECT || 'fitpilot-backend-prod' }}"
+          fi
+
+          COMPOSE_FILE="${{ vars.BACKEND_COMPOSE_FILE || 'docker-compose.yml' }}"
+          BACKEND_SERVICE="${{ vars.BACKEND_SERVICE_NAME || 'backend' }}"
+
+          echo "ghcr_owner=$GHCR_OWNER" >> "$GITHUB_OUTPUT"
+          echo "image_name=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
+          echo "project_name=$PROJECT_NAME" >> "$GITHUB_OUTPUT"
+          echo "compose_file=$COMPOSE_FILE" >> "$GITHUB_OUTPUT"
+          echo "backend_service=$BACKEND_SERVICE" >> "$GITHUB_OUTPUT"
+          echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ steps.meta.outputs.ghcr_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push (backend image)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.image_name }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy Backend to VPS
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: read
+    environment: ${{ github.ref_name == 'development' && 'development' || 'production' }}
+
+    steps:
+      - name: Deploy on VPS (backend only, no redis restart)
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_OWNER: ${{ needs.docker.outputs.ghcr_owner }}
+          GHCR_USER: ${{ needs.docker.outputs.ghcr_owner }}
+          APP_DIR: ${{ needs.docker.outputs.app_dir }}
+          IMAGE_TAG: ${{ needs.docker.outputs.image_tag }}
+          PROJECT_NAME: ${{ needs.docker.outputs.project_name }}
+          COMPOSE_FILE: ${{ needs.docker.outputs.compose_file }}
+          BACKEND_SERVICE: ${{ needs.docker.outputs.backend_service }}
+          NODE_ENV: ${{ needs.docker.outputs.deploy_env }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true
+          envs: GHCR_TOKEN,GHCR_OWNER,GHCR_USER,APP_DIR,IMAGE_TAG,PROJECT_NAME,COMPOSE_FILE,BACKEND_SERVICE,NODE_ENV
+          script: |
+            set -e
+
+            if [ -z "$GHCR_TOKEN" ] || [ -z "$GHCR_USER" ]; then
+              echo "GHCR_TOKEN o GHCR_USER vacio. Revisa secrets del environment."
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            # Solo actualiza backend; evita recrear redis y perder cache en cada deploy.
+            GHCR_OWNER="$GHCR_OWNER" IMAGE_TAG="$IMAGE_TAG" NODE_ENV="$NODE_ENV" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull "$BACKEND_SERVICE"
+            GHCR_OWNER="$GHCR_OWNER" IMAGE_TAG="$IMAGE_TAG" NODE_ENV="$NODE_ENV" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --no-deps "$BACKEND_SERVICE"
+            docker image prune -f
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps
