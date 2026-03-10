@@ -30,6 +30,14 @@ const resolveTrainingApiBaseURL = (): string => {
   return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 };
 
+const resolveNutritionApiBaseURL = (): string => {
+  const configuredBase = import.meta.env.VITE_NUTRITION_API_URL as string | undefined;
+  if (!configuredBase) {
+    return window.location.origin;
+  }
+  return configuredBase.replace(/\/+$/, '');
+};
+
 // Create axios instance with base configuration
 const api: AxiosInstance = axios.create({
   baseURL: resolveTrainingApiBaseURL(),
@@ -75,7 +83,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshedToken = await refreshAccessToken(api.defaults.baseURL || '/api');
+        const refreshedToken = await refreshAccessToken(resolveNutritionApiBaseURL());
         originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${refreshedToken}`;
         originalRequest.withCredentials = true;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
@@ -15,11 +15,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
+import { useProfessional } from '@/contexts/ProfessionalContext';
+import { resolveTrainingAIAccess } from '@/features/subscriptions/planAccess';
 import {
   ArrowLeftIcon,
   PlusIcon,
   CheckIcon,
+  SparklesIcon,
   XMarkIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -40,12 +44,71 @@ const macrocycleSchema = z.object({
 
 type MacrocycleFormData = z.infer<typeof macrocycleSchema>;
 
+const normalizeClientId = (value: unknown): string => String(value ?? '').trim();
+
 export function MesocycleEditorPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const isNew = !id;
+  const { t } = useTranslation(['training', 'ai']);
 
   const { user } = useAuthStore();
+  const { userData, professional } = useProfessional();
+  const accessUser = useMemo(() => {
+    const baseUser = user ?? userData ?? null;
+    if (!baseUser) {
+      return null;
+    }
+
+    const baseAny = baseUser as unknown as {
+      professional_role?: unknown;
+      professional_roles?: unknown;
+    };
+    const professionalAny = professional as unknown as {
+      professional_role?: unknown;
+      professional_roles?: unknown;
+    } | null;
+
+    const mergedRoles = new Set<string>();
+    const collectRoles = (raw: unknown) => {
+      if (!raw) return;
+      if (typeof raw === 'string') {
+        raw
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .forEach((item) => mergedRoles.add(item.toUpperCase()));
+        return;
+      }
+      if (Array.isArray(raw)) {
+        raw
+          .map((item) => String(item).trim().toUpperCase())
+          .filter(Boolean)
+          .forEach((item) => mergedRoles.add(item));
+      }
+    };
+
+    collectRoles(baseAny.professional_role);
+    collectRoles(baseAny.professional_roles);
+    collectRoles(professionalAny?.professional_role);
+    collectRoles(professionalAny?.professional_roles);
+
+    if (!mergedRoles.size) {
+      return baseUser;
+    }
+
+    return {
+      ...baseUser,
+      professional_role: Array.from(mergedRoles),
+    };
+  }, [user, userData, professional]);
+  const aiAccess = resolveTrainingAIAccess(accessUser);
+  const canUseAIGenerator = aiAccess.canAccess;
+  const aiRestrictionMessage = aiAccess.reason === 'missing_plan'
+    ? t('ai:page.trainingPlanRequired')
+    : aiAccess.reason === 'missing_trainer_role'
+      ? t('ai:page.trainerRoleRequired')
+      : '';
   const professionalId = user?.id || '';
   const { data: nutritionClients = [] } = useProfessionalClients(professionalId);
   const {
@@ -98,6 +161,7 @@ export function MesocycleEditorPage() {
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors },
     reset,
   } = useForm<MacrocycleFormData>({
@@ -134,7 +198,7 @@ export function MesocycleEditorPage() {
     setIsSaving(true);
     try {
       if (isNew) {
-        const selectedNutritionClientId = (data.client_id || '').trim() || null;
+        const selectedNutritionClientId = normalizeClientId(data.client_id) || null;
         const createData = {
           name: data.name,
           description: data.description,
@@ -162,6 +226,14 @@ export function MesocycleEditorPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleOpenAIGenerator = () => {
+    const selectedClientId = normalizeClientId(getValues('client_id'));
+    const search = selectedClientId
+      ? `?client_id=${encodeURIComponent(selectedClientId)}`
+      : '';
+    navigate(`/training/ai-generator${search}`);
   };
 
   const handleAddMesocycle = async (mesocycleData: any) => {
@@ -742,14 +814,29 @@ export function MesocycleEditorPage() {
             </div>
           </div>
 
-          <Button
-            variant="primary"
-            onClick={handleSubmit(onSubmit)}
-            isLoading={isSaving}
-          >
-            <CheckIcon className="h-5 w-5 mr-2" />
-            {isNew ? 'Create Program' : 'Save Changes'}
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                onClick={handleOpenAIGenerator}
+                disabled={!canUseAIGenerator}
+              >
+                <SparklesIcon className="h-5 w-5 mr-2" />
+                {t('training:macrocycle.generateWithAi')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSubmit(onSubmit)}
+                isLoading={isSaving}
+              >
+                <CheckIcon className="h-5 w-5 mr-2" />
+                {isNew ? 'Create Program' : 'Save Changes'}
+              </Button>
+            </div>
+            {!canUseAIGenerator && aiRestrictionMessage ? (
+              <p className="text-xs text-amber-700">{aiRestrictionMessage}</p>
+            ) : null}
+          </div>
         </div>
 
         {/* Compact Macrocycle Info Form */}

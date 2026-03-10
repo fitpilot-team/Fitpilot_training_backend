@@ -4,12 +4,19 @@ from typing import List
 from pydantic import BaseModel
 from models.base import get_db
 from models.user import User
-from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay, DayExercise
+from models.mesocycle import DayExercise
 from models.exercise import Exercise
 from schemas.mesocycle import (
     DayExerciseCreate, DayExerciseUpdate, DayExerciseResponse
 )
-from core.dependencies import get_current_user
+from core.dependencies import (
+    assert_macrocycle_access,
+    assert_training_professional_access,
+    get_macrocycle_for_microcycle,
+    get_current_user,
+    get_microcycle_or_404,
+    get_training_day_or_404,
+)
 
 
 class MoveExerciseRequest(BaseModel):
@@ -22,36 +29,42 @@ router = APIRouter()
 
 def verify_training_day_access(db: Session, training_day_id: int, current_user: User):
     """Verify user has access to the training day through its parent macrocycle"""
-    training_day = db.query(TrainingDay).filter(TrainingDay.id == training_day_id).first()
-
-    if not training_day:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Training day with id {training_day_id} not found"
-        )
-
-    # Get parent microcycle
-    microcycle = db.query(Microcycle).filter(Microcycle.id == training_day.microcycle_id).first()
-
-    # Get parent mesocycle
-    mesocycle = db.query(Mesocycle).filter(Mesocycle.id == microcycle.mesocycle_id).first()
-
-    # Get parent macrocycle
-    macrocycle = db.query(Macrocycle).filter(Macrocycle.id == mesocycle.macrocycle_id).first()
-
-    # Check permissions
-    if current_user.role.value == "client" and macrocycle.client_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this exercise"
-        )
-    elif current_user.role.value == "trainer" and macrocycle.trainer_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this exercise"
-        )
+    training_day = get_training_day_or_404(db, training_day_id)
+    microcycle = get_microcycle_or_404(db, training_day.microcycle_id)
+    macrocycle = get_macrocycle_for_microcycle(db, microcycle)
+    assert_macrocycle_access(
+        macrocycle=macrocycle,
+        current_user=current_user,
+        forbidden_detail="Not authorized to access this exercise",
+    )
 
     return training_day
+
+
+def get_day_exercise_or_404(db: Session, day_exercise_id: int) -> DayExercise:
+    day_exercise = db.query(DayExercise).filter(DayExercise.id == day_exercise_id).first()
+    if not day_exercise:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Day exercise with id {day_exercise_id} not found"
+        )
+    return day_exercise
+
+
+def get_day_exercise_with_access(db: Session, day_exercise_id: int, current_user: User) -> DayExercise:
+    day_exercise = get_day_exercise_or_404(db, day_exercise_id)
+    verify_training_day_access(db, day_exercise.training_day_id, current_user)
+    return day_exercise
+
+
+def ensure_exercise_exists(db: Session, exercise_id: int) -> Exercise:
+    exercise = db.query(Exercise).filter(Exercise.id == exercise_id).first()
+    if not exercise:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Exercise with id {exercise_id} not found"
+        )
+    return exercise
 
 
 @router.get("/training-day/{training_day_id}", response_model=list[DayExerciseResponse])
@@ -81,18 +94,7 @@ def get_day_exercise(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific day exercise by ID"""
-    day_exercise = db.query(DayExercise).filter(DayExercise.id == day_exercise_id).first()
-
-    if not day_exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Day exercise with id {day_exercise_id} not found"
-        )
-
-    # Verify access through parent training day
-    verify_training_day_access(db, day_exercise.training_day_id, current_user)
-
-    return day_exercise
+    return get_day_exercise_with_access(db, day_exercise_id, current_user)
 
 
 @router.post("/training-day/{training_day_id}", response_model=DayExerciseResponse, status_code=status.HTTP_201_CREATED)
@@ -107,23 +109,14 @@ def create_day_exercise(
 
     Only trainers and admins can add exercises
     """
-    # Only trainers and admins can create exercises
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can add exercises"
-        )
+    # Only trainer professionals with training plan access (or admin) can create.
+    assert_training_professional_access(current_user)
 
     # Verify training day exists and user has access
     training_day = verify_training_day_access(db, training_day_id, current_user)
 
     # Verify exercise exists
-    exercise = db.query(Exercise).filter(Exercise.id == day_exercise_data.exercise_id).first()
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Exercise with id {day_exercise_data.exercise_id} not found"
-        )
+    ensure_exercise_exists(db, day_exercise_data.exercise_id)
 
     # Create day exercise
     exercise_dict = day_exercise_data.model_dump()
@@ -154,31 +147,13 @@ def update_day_exercise(
 
     Only trainers and admins can update exercises
     """
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can update exercises"
-        )
+    assert_training_professional_access(current_user)
 
-    day_exercise = db.query(DayExercise).filter(DayExercise.id == day_exercise_id).first()
-
-    if not day_exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Day exercise with id {day_exercise_id} not found"
-        )
-
-    # Verify access through parent training day
-    verify_training_day_access(db, day_exercise.training_day_id, current_user)
+    day_exercise = get_day_exercise_with_access(db, day_exercise_id, current_user)
 
     # If exercise_id is being changed, verify new exercise exists
     if day_exercise_data.exercise_id:
-        exercise = db.query(Exercise).filter(Exercise.id == day_exercise_data.exercise_id).first()
-        if not exercise:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Exercise with id {day_exercise_data.exercise_id} not found"
-            )
+        ensure_exercise_exists(db, day_exercise_data.exercise_id)
 
     # Update only provided fields
     update_data = day_exercise_data.model_dump(exclude_unset=True)
@@ -202,22 +177,9 @@ def delete_day_exercise(
 
     Only trainers and admins can delete exercises
     """
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can delete exercises"
-        )
+    assert_training_professional_access(current_user)
 
-    day_exercise = db.query(DayExercise).filter(DayExercise.id == day_exercise_id).first()
-
-    if not day_exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Day exercise with id {day_exercise_id} not found"
-        )
-
-    # Verify access through parent training day
-    verify_training_day_access(db, day_exercise.training_day_id, current_user)
+    day_exercise = get_day_exercise_with_access(db, day_exercise_id, current_user)
 
     db.delete(day_exercise)
     db.commit()
@@ -240,11 +202,7 @@ def reorder_exercises(
 
     Only trainers and admins can reorder exercises
     """
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can reorder exercises"
-        )
+    assert_training_professional_access(current_user)
 
     # Verify training day exists and user has access
     training_day = verify_training_day_access(db, training_day_id, current_user)
@@ -298,23 +256,10 @@ def duplicate_day_exercise(
 
     Only trainers and admins can duplicate exercises
     """
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can duplicate exercises"
-        )
+    assert_training_professional_access(current_user)
 
     # Get original exercise
-    original_exercise = db.query(DayExercise).filter(DayExercise.id == day_exercise_id).first()
-
-    if not original_exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Day exercise with id {day_exercise_id} not found"
-        )
-
-    # Verify access
-    verify_training_day_access(db, original_exercise.training_day_id, current_user)
+    original_exercise = get_day_exercise_with_access(db, day_exercise_id, current_user)
 
     # Create duplicate with next order_index
     new_exercise = DayExercise(
@@ -364,11 +309,7 @@ def move_exercise_between_days(
 
     Only trainers and admins can move exercises.
     """
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can move exercises"
-        )
+    assert_training_professional_access(current_user)
 
     # Get the exercise to move
     exercise = db.query(DayExercise).filter(DayExercise.id == day_exercise_id).first()

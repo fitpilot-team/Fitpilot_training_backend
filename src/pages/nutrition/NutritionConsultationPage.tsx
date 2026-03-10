@@ -33,7 +33,96 @@ import { Modal } from '@/components/common/Modal';
 import { useClientHistory, useSaveClientMetric } from '@/features/client-history/queries';
 import { useAudioRecorder } from '@/features/consultation/hooks/useAudioRecorder';
 import { useTranscribeAudio } from '@/features/consultation/queries';
+import { clientInterviewsApi } from '@/services/client-interviews';
+import type { ClientInterviewUpdate } from '@/types/client';
+import type { AppointmentDraftJsonState } from '@/features/appointments/types';
 import { Loader2, Mic } from 'lucide-react';
+
+type TrainingProfileState = ClientInterviewUpdate;
+
+const DEFAULT_TRAINING_PROFILE: TrainingProfileState = {
+    experience_level: 'beginner',
+    exercise_variety: 'medium',
+    include_cardio: false,
+    include_warmup: true,
+    include_cooldown: false,
+};
+
+const splitCsvToStringArray = (value: string): string[] | undefined => {
+    const items = value
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean);
+
+    return items.length ? Array.from(new Set(items)) : undefined;
+};
+
+const splitCsvToDayArray = (value: string): number[] | undefined => {
+    const parsed = value
+        .split(',')
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isInteger(item) && item >= 1 && item <= 7);
+
+    return parsed.length ? Array.from(new Set(parsed)).sort((a, b) => a - b) : undefined;
+};
+
+const joinArrayForInput = (value?: Array<string | number>): string => {
+    if (!value || value.length === 0) return '';
+    return value.join(', ');
+};
+
+const normalizeTrainingProfile = (raw: any): TrainingProfileState => {
+    if (!raw || typeof raw !== 'object') {
+        return { ...DEFAULT_TRAINING_PROFILE };
+    }
+
+    return {
+        ...DEFAULT_TRAINING_PROFILE,
+        ...raw,
+        experience_level: raw.experience_level || DEFAULT_TRAINING_PROFILE.experience_level,
+        exercise_variety: raw.exercise_variety || DEFAULT_TRAINING_PROFILE.exercise_variety,
+        include_cardio: raw.include_cardio ?? DEFAULT_TRAINING_PROFILE.include_cardio,
+        include_warmup: raw.include_warmup ?? DEFAULT_TRAINING_PROFILE.include_warmup,
+        include_cooldown: raw.include_cooldown ?? DEFAULT_TRAINING_PROFILE.include_cooldown,
+    };
+};
+
+const buildTrainingInterviewPayload = (profile: TrainingProfileState): ClientInterviewUpdate => ({
+    document_id: profile.document_id?.trim() || undefined,
+    phone: profile.phone?.trim() || undefined,
+    address: profile.address?.trim() || undefined,
+    emergency_contact_name: profile.emergency_contact_name?.trim() || undefined,
+    emergency_contact_phone: profile.emergency_contact_phone?.trim() || undefined,
+    insurance_provider: profile.insurance_provider?.trim() || undefined,
+    policy_number: profile.policy_number?.trim() || undefined,
+    experience_level: profile.experience_level || undefined,
+    age: profile.age ?? undefined,
+    gender: profile.gender || undefined,
+    occupation: profile.occupation?.trim() || undefined,
+    weight_kg: profile.weight_kg ?? undefined,
+    height_cm: profile.height_cm ?? undefined,
+    training_experience_months: profile.training_experience_months ?? undefined,
+    primary_goal: profile.primary_goal || undefined,
+    specific_goals_text: profile.specific_goals_text?.trim() || undefined,
+    target_muscle_groups: profile.target_muscle_groups?.length ? profile.target_muscle_groups : undefined,
+    days_per_week: profile.days_per_week ?? undefined,
+    session_duration_minutes: profile.session_duration_minutes ?? undefined,
+    preferred_days: profile.preferred_days?.length ? profile.preferred_days : undefined,
+    has_gym_access: profile.has_gym_access,
+    available_equipment: profile.available_equipment?.length ? profile.available_equipment : undefined,
+    equipment_notes: profile.equipment_notes?.trim() || undefined,
+    injury_areas: profile.injury_areas?.length ? profile.injury_areas : undefined,
+    injury_details: profile.injury_details?.trim() || undefined,
+    excluded_exercises: profile.excluded_exercises?.length ? profile.excluded_exercises : undefined,
+    medical_conditions: profile.medical_conditions?.length ? profile.medical_conditions : undefined,
+    mobility_limitations: profile.mobility_limitations?.trim() || undefined,
+    exercise_variety: profile.exercise_variety || undefined,
+    include_cardio: profile.include_cardio,
+    include_warmup: profile.include_warmup,
+    include_cooldown: profile.include_cooldown,
+    preferred_training_style: profile.preferred_training_style?.trim() || undefined,
+    notes: profile.notes?.trim() || undefined,
+});
 
 
 export function NutritionConsultationPage() {
@@ -112,6 +201,13 @@ export function NutritionConsultationPage() {
         calf_left_cm: '',
         calf_right_cm: ''
     });
+    const [trainingProfile, setTrainingProfile] = useState<TrainingProfileState>(() => ({ ...DEFAULT_TRAINING_PROFILE }));
+    const [trainingProfileDirty, setTrainingProfileDirty] = useState(false);
+    const [isLoadingTrainingProfile, setIsLoadingTrainingProfile] = useState(false);
+    const [isSyncingTrainingProfile, setIsSyncingTrainingProfile] = useState(false);
+    const [trainingSyncWarning, setTrainingSyncWarning] = useState<string | null>(null);
+    const trainingProfileHydratedRef = useRef(false);
+    const loadedRemoteTrainingProfileRef = useRef<string | null>(null);
 
     const startMutation = useStartConsultation();
     const finishMutation = useFinishConsultation();
@@ -187,6 +283,37 @@ export function NutritionConsultationPage() {
     const [modalTab, setModalTab] = useState<'history' | 'upcoming'>('history');
     const [selectedAppointmentDate, setSelectedAppointmentDate] = useState<string | null>(null);
     const finishConsultationMutation = finishMutation;
+
+    const updateTrainingProfileField = <K extends keyof TrainingProfileState>(
+        key: K,
+        value: TrainingProfileState[K]
+    ) => {
+        setTrainingProfile((prev) => ({ ...prev, [key]: value }));
+        setTrainingProfileDirty(true);
+    };
+
+    const syncTrainingProfileToBackend = async (force = false): Promise<boolean> => {
+        if (!appointment?.client_id) return true;
+        if (!force && !trainingProfileDirty) return true;
+
+        setIsSyncingTrainingProfile(true);
+        try {
+            await clientInterviewsApi.updateInterview(
+                String(appointment.client_id),
+                buildTrainingInterviewPayload(trainingProfile)
+            );
+            setTrainingSyncWarning(null);
+            setTrainingProfileDirty(false);
+            return true;
+        } catch (error) {
+            setTrainingSyncWarning(
+                'No se pudo sincronizar el contexto de IA Training en este momento. Se mantuvo guardado en el borrador local.'
+            );
+            return false;
+        } finally {
+            setIsSyncingTrainingProfile(false);
+        }
+    };
 
     // Effect to recalculate
     useEffect(() => {
@@ -343,6 +470,14 @@ export function NutritionConsultationPage() {
                 if (state.metrics) setMetrics(state.metrics);
                 if (state.targetMacros) setTargetMacros(state.targetMacros);
                 if (state.seconds) setSeconds(state.seconds);
+                if (state.trainingProfile) {
+                    setTrainingProfile(normalizeTrainingProfile(state.trainingProfile));
+                    setTrainingProfileDirty(false);
+                    trainingProfileHydratedRef.current = true;
+                    loadedRemoteTrainingProfileRef.current = appointment?.client_id
+                        ? String(appointment.client_id)
+                        : null;
+                }
 
             } else {
                 // Fallback to legacy fields
@@ -387,7 +522,40 @@ export function NutritionConsultationPage() {
                 }
             }
         }
-    }, [existingDraft]);
+    }, [existingDraft, appointment?.client_id]);
+
+    // Hydrate training profile from training backend when draft does not have it
+    useEffect(() => {
+        const clientId = appointment?.client_id ? String(appointment.client_id) : null;
+        if (!clientId || isLoadingDraft) return;
+
+        const draftTrainingProfile = existingDraft?.json_state?.trainingProfile;
+        if (draftTrainingProfile) {
+            trainingProfileHydratedRef.current = true;
+            loadedRemoteTrainingProfileRef.current = clientId;
+            return;
+        }
+
+        if (loadedRemoteTrainingProfileRef.current === clientId) return;
+
+        loadedRemoteTrainingProfileRef.current = clientId;
+        setIsLoadingTrainingProfile(true);
+
+        clientInterviewsApi
+            .getInterview(clientId)
+            .then((remoteProfile) => {
+                setTrainingProfile(normalizeTrainingProfile(remoteProfile));
+                setTrainingProfileDirty(false);
+                setTrainingSyncWarning(null);
+            })
+            .catch(() => {
+                // No remote interview yet is expected for many clients.
+            })
+            .finally(() => {
+                setIsLoadingTrainingProfile(false);
+                trainingProfileHydratedRef.current = true;
+            });
+    }, [appointment?.client_id, isLoadingDraft, existingDraft?.json_state?.trainingProfile]);
 
     // Create Draft on Entry if not present
     useEffect(() => {
@@ -418,7 +586,8 @@ export function NutritionConsultationPage() {
                         carbs: 0,
                         fats: 0
                     },
-                    seconds: 0
+                    seconds: 0,
+                    trainingProfile: { ...DEFAULT_TRAINING_PROFILE }
                 }
             });
         }
@@ -465,14 +634,29 @@ export function NutritionConsultationPage() {
                         stage: view,
                         noteSections,
                         metrics, // Saving raw metrics state strings to preserve input state
-                        targetMacros
-                    }
+                        targetMacros,
+                        seconds,
+                        trainingProfile
+                    } as AppointmentDraftJsonState
                 }
             });
         }, 2000); // Debounce 2s
 
         return () => clearTimeout(timer);
-    }, [noteSections, metrics, view, targetMacros, appointment?.id]);
+    }, [noteSections, metrics, view, targetMacros, seconds, trainingProfile, appointment?.id]);
+
+    // Debounced sync to training backend. If it fails, keep draft data and show warning.
+    useEffect(() => {
+        if (!appointment?.client_id) return;
+        if (!trainingProfileDirty) return;
+        if (!trainingProfileHydratedRef.current) return;
+
+        const timer = setTimeout(() => {
+            void syncTrainingProfileToBackend();
+        }, 1500);
+
+        return () => clearTimeout(timer);
+    }, [trainingProfile, trainingProfileDirty, appointment?.client_id]);
 
     // Refs for state
     const stateRef = useRef({
@@ -480,7 +664,8 @@ export function NutritionConsultationPage() {
         noteSections,
         metrics,
         targetMacros,
-        seconds
+        seconds,
+        trainingProfile
     });
 
     useEffect(() => {
@@ -489,9 +674,10 @@ export function NutritionConsultationPage() {
             noteSections,
             metrics,
             targetMacros,
-            seconds
+            seconds,
+            trainingProfile
         };
-    }, [view, noteSections, metrics, targetMacros, seconds]);
+    }, [view, noteSections, metrics, targetMacros, seconds, trainingProfile]);
 
     const saveDraft = () => {
         if (!appointment?.id) return;
@@ -531,9 +717,25 @@ export function NutritionConsultationPage() {
                     noteSections: state.noteSections,
                     metrics: state.metrics,
                     targetMacros: state.targetMacros,
-                    seconds: state.seconds
-                }
+                    seconds: state.seconds,
+                    trainingProfile: state.trainingProfile
+                } as AppointmentDraftJsonState
             }
+        });
+    };
+
+    const finalizeConsultation = async () => {
+        if (!appointment?.id) return;
+
+        saveDraft();
+        await syncTrainingProfileToBackend(true);
+
+        finishConsultationMutation.mutate({
+            id: Number(appointment.id),
+            durationSeconds: seconds,
+            notes: Object.entries(noteSections)
+                .map(([key, value]) => `${key.toUpperCase()}: ${value}`)
+                .join('\n\n')
         });
     };
 
@@ -1166,6 +1368,324 @@ export function NutritionConsultationPage() {
                                     </div>
                                 )}
 
+                                <div className="mb-8 rounded-[28px] border border-blue-100 bg-gradient-to-br from-blue-50/70 to-white p-5">
+                                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
+                                        <div>
+                                            <h4 className="text-lg font-bold text-blue-900">Contexto IA Training</h4>
+                                            <p className="text-sm text-blue-700">
+                                                Se guarda automáticamente en borrador y se sincroniza con Training.
+                                            </p>
+                                        </div>
+                                        <div className="text-xs font-semibold text-blue-700">
+                                            {isLoadingTrainingProfile
+                                                ? 'Cargando contexto remoto...'
+                                                : isSyncingTrainingProfile
+                                                    ? 'Sincronizando...'
+                                                    : trainingProfileDirty
+                                                        ? 'Cambios pendientes'
+                                                        : 'Sincronizado'}
+                                        </div>
+                                    </div>
+
+                                    {trainingSyncWarning && (
+                                        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                            {trainingSyncWarning}
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.document_id ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('document_id', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Documento de identidad"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.phone ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('phone', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Teléfono"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.emergency_contact_name ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('emergency_contact_name', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Contacto de emergencia"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.emergency_contact_phone ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('emergency_contact_phone', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Teléfono de emergencia"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.insurance_provider ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('insurance_provider', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Aseguradora"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.policy_number ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('policy_number', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Número de póliza"
+                                            />
+                                        </div>
+
+                                        <textarea
+                                            value={trainingProfile.address ?? ''}
+                                            onChange={(e) => updateTrainingProfileField('address', e.target.value)}
+                                            className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            rows={2}
+                                            placeholder="Dirección"
+                                        />
+
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                            <select
+                                                value={trainingProfile.experience_level ?? 'beginner'}
+                                                onChange={(e) => updateTrainingProfileField('experience_level', e.target.value as any)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            >
+                                                <option value="beginner">Principiante</option>
+                                                <option value="intermediate">Intermedio</option>
+                                                <option value="advanced">Avanzado</option>
+                                            </select>
+                                            <input
+                                                type="number"
+                                                value={trainingProfile.age ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('age', e.target.value ? Number(e.target.value) : undefined)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Edad"
+                                            />
+                                            <select
+                                                value={trainingProfile.gender ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('gender', (e.target.value || undefined) as any)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            >
+                                                <option value="">Género</option>
+                                                <option value="male">Masculino</option>
+                                                <option value="female">Femenino</option>
+                                                <option value="other">Otro</option>
+                                                <option value="prefer_not_to_say">Prefiero no decir</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.occupation ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('occupation', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Ocupación"
+                                            />
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={trainingProfile.weight_kg ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('weight_kg', e.target.value ? Number(e.target.value) : undefined)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Peso (kg)"
+                                            />
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={trainingProfile.height_cm ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('height_cm', e.target.value ? Number(e.target.value) : undefined)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Altura (cm)"
+                                            />
+                                            <input
+                                                type="number"
+                                                value={trainingProfile.training_experience_months ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('training_experience_months', e.target.value ? Number(e.target.value) : undefined)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Experiencia (meses)"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <select
+                                                value={trainingProfile.primary_goal ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('primary_goal', (e.target.value || undefined) as any)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            >
+                                                <option value="">Objetivo principal</option>
+                                                <option value="hypertrophy">Hipertrofia</option>
+                                                <option value="strength">Fuerza</option>
+                                                <option value="power">Potencia</option>
+                                                <option value="endurance">Resistencia</option>
+                                                <option value="fat_loss">Pérdida de grasa</option>
+                                                <option value="general_fitness">Fitness general</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                value={joinArrayForInput(trainingProfile.target_muscle_groups as any)}
+                                                onChange={(e) => updateTrainingProfileField('target_muscle_groups', splitCsvToStringArray(e.target.value) as any)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Grupos musculares (coma)"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={trainingProfile.preferred_training_style ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('preferred_training_style', e.target.value)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Estilo preferido"
+                                            />
+                                        </div>
+
+                                        <textarea
+                                            value={trainingProfile.specific_goals_text ?? ''}
+                                            onChange={(e) => updateTrainingProfileField('specific_goals_text', e.target.value)}
+                                            className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            rows={2}
+                                            placeholder="Objetivos específicos"
+                                        />
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <input
+                                                type="number"
+                                                value={trainingProfile.days_per_week ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('days_per_week', e.target.value ? Number(e.target.value) : undefined)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Días por semana"
+                                            />
+                                            <input
+                                                type="number"
+                                                value={trainingProfile.session_duration_minutes ?? ''}
+                                                onChange={(e) => updateTrainingProfileField('session_duration_minutes', e.target.value ? Number(e.target.value) : undefined)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Duración por sesión (min)"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={joinArrayForInput(trainingProfile.preferred_days)}
+                                                onChange={(e) => updateTrainingProfileField('preferred_days', splitCsvToDayArray(e.target.value))}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Días preferidos 1-7 (coma)"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <select
+                                                value={
+                                                    trainingProfile.has_gym_access === undefined
+                                                        ? 'unknown'
+                                                        : trainingProfile.has_gym_access
+                                                            ? 'yes'
+                                                            : 'no'
+                                                }
+                                                onChange={(e) => {
+                                                    const value =
+                                                        e.target.value === 'unknown'
+                                                            ? undefined
+                                                            : e.target.value === 'yes';
+                                                    updateTrainingProfileField('has_gym_access', value);
+                                                }}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            >
+                                                <option value="unknown">Acceso a gimnasio (sin definir)</option>
+                                                <option value="yes">Sí</option>
+                                                <option value="no">No</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                value={joinArrayForInput(trainingProfile.available_equipment as any)}
+                                                onChange={(e) => updateTrainingProfileField('available_equipment', splitCsvToStringArray(e.target.value) as any)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Equipamiento disponible (coma)"
+                                            />
+                                        </div>
+
+                                        <textarea
+                                            value={trainingProfile.equipment_notes ?? ''}
+                                            onChange={(e) => updateTrainingProfileField('equipment_notes', e.target.value)}
+                                            className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            rows={2}
+                                            placeholder="Notas de equipamiento"
+                                        />
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <input
+                                                type="text"
+                                                value={joinArrayForInput(trainingProfile.injury_areas as any)}
+                                                onChange={(e) => updateTrainingProfileField('injury_areas', splitCsvToStringArray(e.target.value))}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Zonas de lesión (coma)"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={joinArrayForInput(trainingProfile.excluded_exercises)}
+                                                onChange={(e) => updateTrainingProfileField('excluded_exercises', splitCsvToStringArray(e.target.value))}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Ejercicios excluidos (coma)"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={joinArrayForInput(trainingProfile.medical_conditions)}
+                                                onChange={(e) => updateTrainingProfileField('medical_conditions', splitCsvToStringArray(e.target.value))}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                                placeholder="Condiciones médicas (coma)"
+                                            />
+                                            <select
+                                                value={trainingProfile.exercise_variety ?? 'medium'}
+                                                onChange={(e) => updateTrainingProfileField('exercise_variety', e.target.value as any)}
+                                                className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            >
+                                                <option value="low">Variedad baja</option>
+                                                <option value="medium">Variedad media</option>
+                                                <option value="high">Variedad alta</option>
+                                            </select>
+                                        </div>
+
+                                        <textarea
+                                            value={trainingProfile.injury_details ?? ''}
+                                            onChange={(e) => updateTrainingProfileField('injury_details', e.target.value)}
+                                            className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            rows={2}
+                                            placeholder="Detalles de lesión"
+                                        />
+
+                                        <textarea
+                                            value={trainingProfile.mobility_limitations ?? ''}
+                                            onChange={(e) => updateTrainingProfileField('mobility_limitations', e.target.value)}
+                                            className="w-full p-3 rounded-xl border border-blue-100 bg-white text-sm"
+                                            rows={2}
+                                            placeholder="Limitaciones de movilidad"
+                                        />
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <label className="flex items-center gap-2 p-3 rounded-xl border border-blue-100 bg-white text-sm text-gray-700">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={trainingProfile.include_cardio ?? false}
+                                                    onChange={(e) => updateTrainingProfileField('include_cardio', e.target.checked)}
+                                                />
+                                                Incluir cardio
+                                            </label>
+                                            <label className="flex items-center gap-2 p-3 rounded-xl border border-blue-100 bg-white text-sm text-gray-700">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={trainingProfile.include_warmup ?? true}
+                                                    onChange={(e) => updateTrainingProfileField('include_warmup', e.target.checked)}
+                                                />
+                                                Incluir calentamiento
+                                            </label>
+                                            <label className="flex items-center gap-2 p-3 rounded-xl border border-blue-100 bg-white text-sm text-gray-700">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={trainingProfile.include_cooldown ?? false}
+                                                    onChange={(e) => updateTrainingProfileField('include_cooldown', e.target.checked)}
+                                                />
+                                                Incluir enfriamiento
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div 
                                         className="p-4 rounded-3xl bg-gray-50 border border-transparent hover:border-gray-200 focus-within:border-nutrition-400 focus-within:ring-2 focus-within:ring-nutrition-100 transition-all group"
@@ -1356,14 +1876,8 @@ export function NutritionConsultationPage() {
                                     Cancelar
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        finishConsultationMutation.mutate({ 
-                                            id: Number(appointment.id), 
-                                            durationSeconds: seconds,
-                                            notes: Object.entries(noteSections)
-                                                .map(([key, value]) => `${key.toUpperCase()}: ${value}`)
-                                                .join('\n\n')
-                                        });
+                                    onClick={async () => {
+                                        await finalizeConsultation();
                                         setShowEndConfirmation(false);
                                     }}
                                     className="flex-1 py-3.5 rounded-2xl bg-red-500 text-white font-bold shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"

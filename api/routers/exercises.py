@@ -2,6 +2,7 @@
 API router for Exercise endpoints.
 Provides CRUD operations for exercises with muscle relationships.
 """
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
@@ -40,8 +41,23 @@ def _safe_muscle_display_name(muscle: Muscle) -> str:
     return muscle.display_name_es or muscle.display_name_en or muscle.name
 
 
+def _utcnow_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _resolve_response_timestamps(exercise: Exercise) -> tuple[datetime, datetime]:
+    """
+    Return non-null timestamps for API responses.
+    Keeps response schema stable even for legacy rows with missing dates.
+    """
+    created_at = exercise.created_at or exercise.updated_at or _utcnow_naive()
+    updated_at = exercise.updated_at or created_at
+    return created_at, updated_at
+
+
 def build_exercise_response(exercise: Exercise) -> dict:
     """Build an exercise response with muscle relationships."""
+    created_at, updated_at = _resolve_response_timestamps(exercise)
     primary_muscles: List[ExerciseMuscleResponse] = []
     secondary_muscles: List[ExerciseMuscleResponse] = []
 
@@ -81,8 +97,8 @@ def build_exercise_response(exercise: Exercise) -> dict:
         "calories_per_minute": exercise.calories_per_minute,
         "primary_muscles": primary_muscles,
         "secondary_muscles": secondary_muscles,
-        "created_at": exercise.created_at,
-        "updated_at": exercise.updated_at or exercise.created_at,
+        "created_at": created_at,
+        "updated_at": updated_at,
     }
 
 
@@ -210,6 +226,9 @@ def create_exercise(
     _validate_muscles_exist(db, list(set(primary_ids + secondary_ids)))
 
     exercise_dict = exercise_data.model_dump(mode="json", exclude={"primary_muscle_ids", "secondary_muscle_ids"})
+    now = _utcnow_naive()
+    exercise_dict["created_at"] = now
+    exercise_dict["updated_at"] = now
     new_exercise = Exercise(**exercise_dict)
     db.add(new_exercise)
     db.flush()
@@ -268,6 +287,7 @@ def update_exercise(
             if muscle_id not in primary_ids:
                 db.add(ExerciseMuscle(exercise_id=exercise_id, muscle_id=muscle_id, muscle_role="secondary"))
 
+    exercise.updated_at = _utcnow_naive()
     db.commit()
 
     return build_exercise_response(_require_existing_exercise(exercise_id, db))

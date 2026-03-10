@@ -10,6 +10,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAIStore } from '../store/aiStore';
 import { useAuthStore } from '../store/newAuthStore';
+import { useProfessional } from '@/contexts/ProfessionalContext';
+import { buildTrainingAccessUser, resolveTrainingAIAccess } from '@/features/subscriptions/planAccess';
 import {
   ModeSelector,
   ClientSelector,
@@ -53,7 +55,15 @@ export const AIGeneratorPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const clientIdFromUrl = searchParams.get('client_id');
 
-  const { user } = useAuthStore();
+  const { user, authChecked } = useAuthStore();
+  const { userData, professional, isLoading: isProfessionalLoading } = useProfessional();
+  const accessUser = useMemo(
+    () => buildTrainingAccessUser(user, userData, professional),
+    [user, userData, professional],
+  );
+  const isAuthResolving = !authChecked || (isProfessionalLoading && !accessUser);
+  const aiAccess = resolveTrainingAIAccess(accessUser);
+  const canGenerate = aiAccess.canAccess;
   const {
     creationMode,
     selectedClientId,
@@ -114,6 +124,9 @@ export const AIGeneratorPage: React.FC = () => {
   // Initialize based on URL params
   useEffect(() => {
     const initializeFromUrl = async () => {
+      if (!canGenerate) {
+        return;
+      }
       reset();
 
       if (clientIdFromUrl) {
@@ -149,16 +162,19 @@ export const AIGeneratorPage: React.FC = () => {
     };
 
     initializeFromUrl();
-  }, [clientIdFromUrl]);
+  }, [clientIdFromUrl, canGenerate, reset, setCreationMode, setSelectedClient, setInterviewValidation, loadInterviewData]);
 
   // Load questionnaire config once to align steps with backend
   useEffect(() => {
+    if (!canGenerate) {
+      return;
+    }
     if (!config) {
       loadConfig().catch(() => {
         toast.error(t('ai:errors.configLoadFailed', { defaultValue: 'No pudimos cargar el cuestionario. Intenta de nuevo.' }));
       });
     }
-  }, [config, loadConfig, t]);
+  }, [canGenerate, config, loadConfig, t]);
 
   // Handle errors
   useEffect(() => {
@@ -197,10 +213,26 @@ export const AIGeneratorPage: React.FC = () => {
     autoSaveAndRedirect();
   }, [isGenerating, generatedWorkout]);
 
-  // Check if user can generate (trainer or admin)
-  const canGenerate = user?.role === 'trainer' || user?.role === 'admin';
+  if (isAuthResolving) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+          <span className="text-sm font-medium text-gray-600">
+            {t('common:loading', { defaultValue: 'Cargando...' })}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (!canGenerate) {
+    const accessMessage = aiAccess.reason === 'missing_plan'
+      ? t('ai:page.trainingPlanRequired')
+      : aiAccess.reason === 'missing_trainer_role'
+        ? t('ai:page.trainerRoleRequired')
+        : t('ai:page.trainersOnly');
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -209,10 +241,10 @@ export const AIGeneratorPage: React.FC = () => {
             {t('ai:page.accessRestricted')}
           </h2>
           <p className="text-gray-600 mb-4">
-            {t('ai:page.trainersOnly')}
+            {accessMessage}
           </p>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(aiAccess.firstAllowedRoute || '/')}
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             {t('ai:page.backToDashboard')}

@@ -3,7 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from core.config import settings
-from api.routers import auth, exercises, muscles, mesocycles, microcycles, training_days, day_exercises, ai_generator, translation, workout_logs
+from api.routers import (
+    ai_generator,
+    auth,
+    clients,
+    client_interviews,
+    day_exercises,
+    exercises,
+    mesocycles,
+    microcycles,
+    muscles,
+    training_days,
+    translation,
+    workout_logs,
+)
 
 app = FastAPI(
     title="FitPilot API",
@@ -16,8 +29,31 @@ LOCAL_LAN_ORIGIN_REGEX = (
     r"https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}"
     r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?"
 )
-frontend_origin = settings.FRONTEND_URL.rstrip("/")
-allowed_origins = [frontend_origin] if frontend_origin else ["http://localhost:3000"]
+
+
+def _resolve_allowed_origins() -> list[str]:
+    configured_origins = [
+        origin.strip().rstrip("/")
+        for origin in (settings.CORS_ALLOWED_ORIGINS or "").split(",")
+        if origin and origin.strip()
+    ]
+
+    frontend_origin = settings.FRONTEND_URL.strip().rstrip("/") if settings.FRONTEND_URL else ""
+    if frontend_origin:
+        configured_origins.append(frontend_origin)
+
+    # Docker/local default for this workspace deployment.
+    configured_origins.append("http://localhost:4000")
+
+    deduped_origins: list[str] = []
+    for origin in configured_origins:
+        if origin and origin not in deduped_origins:
+            deduped_origins.append(origin)
+
+    return deduped_origins or ["http://localhost:3000", "http://localhost:4000"]
+
+
+allowed_origins = _resolve_allowed_origins()
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,10 +73,12 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(muscles.router, prefix="/api/muscles", tags=["Muscles"])
 app.include_router(exercises.router, prefix="/api/exercises", tags=["Exercises"])
+app.include_router(clients.router, prefix="/api/clients", tags=["Clients"])
 app.include_router(mesocycles.router, prefix="/api/mesocycles", tags=["Mesocycles"])
 app.include_router(microcycles.router, prefix="/api/microcycles", tags=["Microcycles"])
 app.include_router(training_days.router, prefix="/api/training-days", tags=["Training Days"])
 app.include_router(day_exercises.router, prefix="/api/day-exercises", tags=["Day Exercises"])
+app.include_router(client_interviews.router, prefix="/api/client-interviews", tags=["Client Interviews"])
 
 # AI Generator
 app.include_router(ai_generator.router, prefix="/api/ai", tags=["AI Generator"])

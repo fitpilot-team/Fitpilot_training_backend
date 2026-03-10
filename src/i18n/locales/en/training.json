@@ -15,7 +15,8 @@
     "client": "Client",
     "noClient": "No client",
     "createProgram": "Create Program",
-    "saveChanges": "Save Changes"
+    "saveChanges": "Save Changes",
+    "generateWithAi": "Generate with AI"
   },
   "mesocycle": {
     "title": "Mesocycle",
@@ -150,6 +151,24 @@
     "new": "New Template",
     "noTemplates": "No templates yet",
     "createFirst": "Create First Template"
+  },
+  "clientPlans": {
+    "title": "Client Plans",
+    "subtitle": "Full management of assigned training programs",
+    "unknownClient": "Client #{{clientId}}",
+    "programCount_one": "{{count}} assigned program",
+    "programCount_other": "{{count}} assigned programs",
+    "morePrograms": "+ {{count}} more",
+    "filters": {
+      "searchClient": "Search by client"
+    },
+    "actions": {
+      "openLatestProgram": "Open Latest Program"
+    },
+    "empty": {
+      "title": "No clients with programs",
+      "description": "Clients with assigned training programs will appear here."
+    }
   },
   "messages": {
     "programCreated": "Training program created successfully",

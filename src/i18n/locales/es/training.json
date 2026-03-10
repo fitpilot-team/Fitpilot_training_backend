@@ -15,7 +15,8 @@
     "client": "Cliente",
     "noClient": "Sin cliente",
     "createProgram": "Crear Programa",
-    "saveChanges": "Guardar Cambios"
+    "saveChanges": "Guardar Cambios",
+    "generateWithAi": "Generar con IA"
   },
   "mesocycle": {
     "title": "Mesociclo",
@@ -150,6 +151,24 @@
     "new": "Nueva Plantilla",
     "noTemplates": "No hay plantillas aún",
     "createFirst": "Crear Primera Plantilla"
+  },
+  "clientPlans": {
+    "title": "Planes Clientes",
+    "subtitle": "Gestion integral de programas de entrenamiento",
+    "unknownClient": "Cliente #{{clientId}}",
+    "programCount_one": "{{count}} programa asignado",
+    "programCount_other": "{{count}} programas asignados",
+    "morePrograms": "+ {{count}} mas",
+    "filters": {
+      "searchClient": "Buscar por cliente"
+    },
+    "actions": {
+      "openLatestProgram": "Abrir programa mas reciente"
+    },
+    "empty": {
+      "title": "No hay clientes con programas",
+      "description": "Los clientes con entrenamientos asignados apareceran aqui."
+    }
   },
   "messages": {
     "programCreated": "Programa de entrenamiento creado correctamente",

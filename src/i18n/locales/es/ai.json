@@ -5,6 +5,8 @@
   "page": {
     "accessRestricted": "Acceso Restringido",
     "trainersOnly": "Solo los entrenadores pueden generar programas de entrenamiento.",
+    "trainingPlanRequired": "Necesitas un plan con acceso a entrenamiento para usar el generador IA.",
+    "trainerRoleRequired": "Necesitas el rol profesional TRAINER para usar el generador IA.",
     "backToDashboard": "Volver al Dashboard",
     "client": "Cliente",
     "selectClient": "Seleccionar cliente",

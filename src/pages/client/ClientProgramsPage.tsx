@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -7,6 +8,9 @@ import { Modal } from '../../components/common/Modal';
 import type { Client } from '../../types/client';
 import type { Macrocycle } from '../../types';
 import { useMesocycleStore } from '../../store/mesocycleStore';
+import { useAuthStore } from '../../store/newAuthStore';
+import { useProfessional } from '@/contexts/ProfessionalContext';
+import { buildTrainingAccessUser, resolveTrainingAIAccess } from '@/features/subscriptions/planAccess';
 import {
   PlusIcon,
   CalendarDaysIcon,
@@ -21,8 +25,22 @@ interface ClientContext {
 }
 
 export function ClientProgramsPage() {
+  const { t } = useTranslation(['ai']);
   const { client } = useOutletContext<ClientContext>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const { userData, professional } = useProfessional();
+  const accessUser = useMemo(
+    () => buildTrainingAccessUser(user, userData, professional),
+    [user, userData, professional],
+  );
+  const aiAccess = resolveTrainingAIAccess(accessUser);
+  const canUseAIGenerator = aiAccess.canAccess;
+  const aiRestrictionMessage = aiAccess.reason === 'missing_plan'
+    ? t('ai:page.trainingPlanRequired')
+    : aiAccess.reason === 'missing_trainer_role'
+      ? t('ai:page.trainerRoleRequired')
+      : '';
   const { macrocycles, isLoadingMacrocycles, loadMacrocycles } = useMesocycleStore();
   const [clientPrograms, setClientPrograms] = useState<Macrocycle[]>([]);
   const [templates, setTemplates] = useState<Macrocycle[]>([]);
@@ -61,11 +79,31 @@ export function ClientProgramsPage() {
     navigate(`/clients/${client.id}/programs/new`);
   };
 
+  const renderAIGeneratorButton = () => (
+    <Button
+      variant="secondary"
+      onClick={() => navigate(`/training/ai-generator?client_id=${client.id}`)}
+      disabled={!canUseAIGenerator}
+    >
+      <SparklesIcon className="h-5 w-5 mr-2" />
+      AI Generator
+    </Button>
+  );
+
+  const renderTemplateButton = () => (
+    <Button variant="secondary" onClick={() => setShowTemplateModal(true)}>
+      <DocumentDuplicateIcon className="h-5 w-5 mr-2" />
+      Load Template
+    </Button>
+  );
+
   if (isLoadingMacrocycles) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
-      </div>
+      <Card>
+        <div className="flex min-h-[16rem] items-center justify-center">
+          <LoadingSpinner size="lg" />
+        </div>
+      </Card>
     );
   }
 
@@ -78,16 +116,13 @@ export function ClientProgramsPage() {
           <p className="mt-1 text-gray-600">
             Manage training programs for {client.full_name}
           </p>
+          {!canUseAIGenerator && aiRestrictionMessage ? (
+            <p className="mt-2 text-sm text-amber-700">{aiRestrictionMessage}</p>
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={() => navigate(`/ai-generator?client_id=${client.id}`)}>
-            <SparklesIcon className="h-5 w-5 mr-2" />
-            AI Generator
-          </Button>
-          <Button variant="secondary" onClick={() => setShowTemplateModal(true)}>
-            <DocumentDuplicateIcon className="h-5 w-5 mr-2" />
-            Load Template
-          </Button>
+          {renderAIGeneratorButton()}
+          {renderTemplateButton()}
           <Button variant="primary" onClick={handleCreateProgram}>
             <PlusIcon className="h-5 w-5 mr-2" />
             New Program
@@ -107,14 +142,8 @@ export function ClientProgramsPage() {
               Create a personalized training program for {client.full_name} to get started.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button variant="secondary" onClick={() => navigate(`/ai-generator?client_id=${client.id}`)}>
-                <SparklesIcon className="h-5 w-5 mr-2" />
-                AI Generator
-              </Button>
-              <Button variant="secondary" onClick={() => setShowTemplateModal(true)}>
-                <DocumentDuplicateIcon className="h-5 w-5 mr-2" />
-                Load Template
-              </Button>
+              {renderAIGeneratorButton()}
+              {renderTemplateButton()}
               <Button variant="primary" onClick={handleCreateProgram}>
                 <PlusIcon className="h-5 w-5 mr-2" />
                 Create First Program

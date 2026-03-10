@@ -1,3 +1,5 @@
+import type { ClientInterviewUpdate } from '@/types/client';
+
 export interface IAppointment {
     id: number;
     professional_id: number;
@@ -16,6 +18,26 @@ export interface IAppointment {
     stage?: string;
 }
 
+export interface AppointmentDraftJsonState {
+    stage?: string;
+    noteSections?: {
+        motivo: string;
+        evolucion: string;
+        indicaciones: string;
+        acuerdos: string;
+    };
+    metrics?: Record<string, string>;
+    targetMacros?: {
+        calories: number;
+        proteins: number;
+        carbs: number;
+        fats: number;
+    };
+    seconds?: number;
+    trainingProfile?: ClientInterviewUpdate;
+    [key: string]: any;
+}
+
 export interface CreateAppointmentDraftRequest {
     appointment_id: number;
     stage: string;
@@ -27,7 +49,7 @@ export interface CreateAppointmentDraftRequest {
         carbs: number;
         fats: number;
     };
-    json_state?: any;
+    json_state?: AppointmentDraftJsonState;
 }
 
 export interface UpdateAppointmentDraftRequest {
@@ -40,5 +62,5 @@ export interface UpdateAppointmentDraftRequest {
         carbs: number;
         fats: number;
     };
-    json_state?: any;
+    json_state?: AppointmentDraftJsonState;
 }

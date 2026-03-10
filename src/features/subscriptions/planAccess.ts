@@ -13,6 +13,24 @@ export type ResolvedPlanAccess = {
   firstAllowedRoute: string;
 };
 
+export type TrainingAIAccessReason =
+  | 'ok'
+  | 'missing_user'
+  | 'missing_plan'
+  | 'missing_trainer_role';
+
+export type ResolvedTrainingAIAccess = {
+  canAccess: boolean;
+  reason: TrainingAIAccessReason;
+  firstAllowedRoute: string;
+};
+
+type UserRoleSource = Pick<User, 'professional_role'> & {
+  professional_roles?: unknown;
+  professionalRole?: unknown;
+  professionalRoles?: unknown;
+};
+
 const NUTRITION_DENIED_MESSAGE =
   'Necesitas un plan con acceso a nutricion para usar este modulo.';
 const TRAINING_DENIED_MESSAGE =
@@ -140,6 +158,115 @@ const getPlanRule = (planId: number | null, planName: string | null) => {
   };
 };
 
+const normalizeRoleName = (value: unknown): string =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase();
+
+const collectRoleValues = (raw: unknown, target: Set<string>) => {
+  if (!raw) {
+    return;
+  }
+
+  const addRole = (value: unknown) => {
+    const normalized = String(value ?? '').trim().toUpperCase();
+    if (normalized) {
+      target.add(normalized);
+    }
+  };
+
+  if (typeof raw === 'string') {
+    raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .forEach(addRole);
+    return;
+  }
+
+  if (Array.isArray(raw)) {
+    raw.forEach((item) => {
+      if (item && typeof item === 'object') {
+        const maybeRole = (item as Record<string, unknown>).role
+          ?? (item as Record<string, unknown>).name
+          ?? (item as Record<string, unknown>).value;
+        addRole(maybeRole);
+        return;
+      }
+      addRole(item);
+    });
+    return;
+  }
+
+  if (typeof raw === 'object') {
+    const record = raw as Record<string, unknown>;
+    const maybeNested = record.role ?? record.name ?? record.value;
+    if (Array.isArray(maybeNested) || typeof maybeNested === 'string') {
+      collectRoleValues(maybeNested, target);
+      return;
+    }
+    addRole(maybeNested);
+  }
+};
+
+const mergeProfessionalRoleSources = (
+  roles: Set<string>,
+  source: UserRoleSource | null | undefined,
+) => {
+  if (!source) {
+    return;
+  }
+
+  collectRoleValues(source.professional_role, roles);
+  collectRoleValues(source.professional_roles, roles);
+  collectRoleValues(source.professionalRole, roles);
+  collectRoleValues(source.professionalRoles, roles);
+};
+
+export const buildTrainingAccessUser = (
+  primaryUser: User | null | undefined,
+  fallbackUser?: User | null | undefined,
+  professionalSource?: Partial<UserRoleSource> | null,
+): User | null => {
+  const baseUser = primaryUser ?? fallbackUser ?? null;
+  if (!baseUser) {
+    return null;
+  }
+
+  const mergedRoles = new Set<string>();
+  mergeProfessionalRoleSources(mergedRoles, baseUser as UserRoleSource);
+  mergeProfessionalRoleSources(mergedRoles, professionalSource as UserRoleSource | null);
+
+  if (!mergedRoles.size) {
+    return baseUser;
+  }
+
+  return {
+    ...baseUser,
+    professional_role: Array.from(mergedRoles),
+  };
+};
+
+const getProfessionalRoles = (user: User | null): Set<string> => {
+  const roles = new Set<string>();
+
+  const candidates = [
+    (user as Record<string, unknown> | null)?.professional_role,
+    (user as Record<string, unknown> | null)?.professional_roles,
+    (user as Record<string, unknown> | null)?.professionalRole,
+    (user as Record<string, unknown> | null)?.professionalRoles,
+  ];
+  candidates.forEach((candidate) => collectRoleValues(candidate, roles));
+
+  // Backward compatibility for accounts whose effective auth role is `trainer`
+  const normalizedRole = normalizeRoleName(user?.role);
+  if (!roles.size && normalizedRole === 'trainer') {
+    roles.add('TRAINER');
+  }
+
+  return roles;
+};
+
 export const resolvePlanAccess = (user: User | null): ResolvedPlanAccess => {
   const hasSubscriptionAccess =
     user?.has_active_subscription === true ||
@@ -175,6 +302,51 @@ export const resolvePlanAccess = (user: User | null): ResolvedPlanAccess => {
       planRule.canAccessNutrition,
       planRule.canAccessTraining,
     ),
+  };
+};
+
+export const resolveTrainingAIAccess = (user: User | null): ResolvedTrainingAIAccess => {
+  if (!user) {
+    return {
+      canAccess: false,
+      reason: 'missing_user',
+      firstAllowedRoute: '/auth/login',
+    };
+  }
+
+  const role = normalizeRoleName(user.role);
+  const isAdmin = role === 'admin' || role === 'administrator' || role === 'super_admin';
+  const planAccess = resolvePlanAccess(user);
+
+  if (isAdmin) {
+    return {
+      canAccess: true,
+      reason: 'ok',
+      firstAllowedRoute: planAccess.firstAllowedRoute,
+    };
+  }
+
+  if (!planAccess.canAccessTraining) {
+    return {
+      canAccess: false,
+      reason: 'missing_plan',
+      firstAllowedRoute: planAccess.firstAllowedRoute,
+    };
+  }
+
+  const roles = getProfessionalRoles(user);
+  if (!roles.has('TRAINER')) {
+    return {
+      canAccess: false,
+      reason: 'missing_trainer_role',
+      firstAllowedRoute: planAccess.firstAllowedRoute,
+    };
+  }
+
+  return {
+    canAccess: true,
+    reason: 'ok',
+    firstAllowedRoute: planAccess.firstAllowedRoute,
   };
 };
 

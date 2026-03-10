@@ -6,7 +6,9 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ExercisesPage } from './pages/ExercisesPage';
 import { TrainingTemplatesPage } from './pages/TrainingTemplatesPage';
+import { TrainingClientPlansPage } from './pages/TrainingClientPlansPage';
 import { MesocycleEditorPage } from './pages/MesocycleEditorPage';
+import { AIGeneratorPage } from './pages/AIGeneratorPage';
 import { MainLayout } from './components/layout/MainLayout';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { NutritionClientsPage } from './pages/nutrition/NutritionClientsPage';
@@ -42,6 +44,16 @@ import {
 function LegacyMesocycleRedirect() {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={id ? `/training/programs/${id}` : '/training/programs'} replace />;
+}
+
+function LegacyAIGeneratorRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={`/training/ai-generator${location.search || ''}${location.hash || ''}`}
+      replace
+    />
+  );
 }
 
 function App() {
@@ -164,6 +176,28 @@ function App() {
         />
 
         <Route
+          path="/training/client-plans"
+          element={
+            <ProtectedRoute requiredAccess="training">
+              <MainLayout>
+                <TrainingClientPlansPage />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/training/ai-generator"
+          element={
+            <ProtectedRoute requiredAccess="training">
+              <MainLayout>
+                <AIGeneratorPage />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/training/programs/new"
           element={
             <ProtectedRoute requiredAccess="training">
@@ -266,7 +300,7 @@ function App() {
 
         <Route
           path="/ai-generator"
-          element={<Navigate to="/training/programs" replace />}
+          element={<LegacyAIGeneratorRedirect />}
         />
 
 

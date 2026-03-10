@@ -30,6 +30,7 @@ const trainingConfig: NavItem[] = [
   // { nameKey: 'dashboard', href: '/', icon: HomeIcon },
   { nameKey: 'exercises', href: '/training/exercises', icon: Dumbbell },
   { nameKey: 'templates', href: '/training/programs', icon: DocumentDuplicateIcon },
+  { nameKey: 'trainingClientPlans', href: '/training/client-plans', icon: ClipboardDocumentListIcon },
 ];
 
 const nutritionPrimaryItems: NavItem[] = [

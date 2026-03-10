@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
+    CORS_ALLOWED_ORIGINS: Optional[str] = None
     MOBILE_SCHEME: str = "fitpilot://"
 
     # Cross-service auth compatibility (Nutrition -> Training)

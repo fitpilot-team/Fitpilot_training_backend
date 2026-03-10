@@ -5,6 +5,8 @@
   "page": {
     "accessRestricted": "Restricted Access",
     "trainersOnly": "Only trainers can generate training programs.",
+    "trainingPlanRequired": "You need a plan with training access to use the AI generator.",
+    "trainerRoleRequired": "You need the TRAINER professional role to use the AI generator.",
     "backToDashboard": "Back to Dashboard",
     "client": "Client",
     "selectClient": "Select client",

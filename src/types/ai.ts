@@ -119,6 +119,7 @@ export interface InterviewDataResponse {
   availability: Availability;
   equipment: Equipment;
   restrictions?: Restrictions;
+  preferences?: Preferences;
 }
 
 // =============== Generated Program Types ===============
@@ -264,6 +265,7 @@ export interface QuestionnaireAnswers {
   exercise_variety?: ExerciseVariety;
   include_cardio?: boolean;
   include_warmup?: boolean;
+  include_cooldown?: boolean;
   preferred_training_style?: string;
 
   // Duration

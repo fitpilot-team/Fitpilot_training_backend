@@ -13,7 +13,12 @@ from schemas.mesocycle import (
     TrainingDayCreate, TrainingDayUpdate, TrainingDayResponse,
     DayExerciseCreate, DayExerciseUpdate, DayExerciseResponse
 )
-from core.dependencies import get_current_user, get_effective_user_role
+from core.dependencies import (
+    assert_macrocycle_access,
+    assert_training_professional_access,
+    get_current_user,
+    get_effective_user_role,
+)
 
 router = APIRouter()
 
@@ -40,6 +45,8 @@ def list_macrocycles(
     query = db.query(Macrocycle)
 
     role = get_effective_user_role(current_user)
+    if role in {"trainer", "admin"}:
+        assert_training_professional_access(current_user)
 
     # Filter based on user role
     if role == "client":
@@ -95,6 +102,8 @@ def get_macrocycle(
         )
 
     role = get_effective_user_role(current_user)
+    if role in {"trainer", "admin"}:
+        assert_training_professional_access(current_user)
 
     # Check permissions
     if role == "client" and macrocycle.client_id != current_user.id:
@@ -122,14 +131,7 @@ def create_macrocycle(
 
     Can optionally include nested mesocycles, microcycles, training days and exercises
     """
-    role = get_effective_user_role(current_user)
-
-    # Only trainers and admins can create macrocycles
-    if role not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can create macrocycles"
-        )
+    assert_training_professional_access(current_user)
 
     # Create macrocycle
     macrocycle_dict = macrocycle_data.model_dump(exclude={"mesocycles"})
@@ -168,14 +170,7 @@ def update_macrocycle(
             detail=f"Macrocycle with id {macrocycle_id} not found"
         )
 
-    role = get_effective_user_role(current_user)
-
-    # Check permissions
-    if role == "trainer" and macrocycle.trainer_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update this macrocycle"
-        )
+    _check_trainer_access(macrocycle, current_user)
 
     # Update only provided fields
     update_data = macrocycle_data.model_dump(exclude_unset=True)
@@ -207,14 +202,7 @@ def delete_macrocycle(
             detail=f"Macrocycle with id {macrocycle_id} not found"
         )
 
-    role = get_effective_user_role(current_user)
-
-    # Check permissions
-    if role == "trainer" and macrocycle.trainer_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this macrocycle"
-        )
+    _check_trainer_access(macrocycle, current_user)
 
     db.delete(macrocycle)
     db.commit()
@@ -549,30 +537,17 @@ def delete_day_exercise(
 
 def _check_macrocycle_access(macrocycle: Macrocycle, current_user: User):
     """Check if user has access to view a macrocycle"""
-    role = get_effective_user_role(current_user)
-
-    if role == "client" and macrocycle.client_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this macrocycle"
-        )
-    elif role == "trainer" and macrocycle.trainer_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this macrocycle"
-        )
+    assert_macrocycle_access(
+        macrocycle=macrocycle,
+        current_user=current_user,
+        forbidden_detail="Not authorized to access this macrocycle",
+    )
 
 
 def _check_trainer_access(macrocycle: Macrocycle, current_user: User):
     """Check if user has trainer access to modify a macrocycle"""
-    role = get_effective_user_role(current_user)
-
-    if role not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can modify training programs"
-        )
-    if role == "trainer" and macrocycle.trainer_id != current_user.id:
+    context = assert_training_professional_access(current_user)
+    if context.effective_role == "trainer" and macrocycle.trainer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to modify this macrocycle"

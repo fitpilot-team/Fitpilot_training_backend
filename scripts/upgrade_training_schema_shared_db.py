@@ -400,6 +400,65 @@ DDL_STATEMENTS: list[str] = [
       FROM ranked r
      WHERE de.id = r.id;
     """,
+    """
+    ALTER TABLE training.client_interviews
+        ADD COLUMN IF NOT EXISTS document_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS address VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS emergency_contact_name VARCHAR(200),
+        ADD COLUMN IF NOT EXISTS emergency_contact_phone VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS insurance_provider VARCHAR(200),
+        ADD COLUMN IF NOT EXISTS policy_number VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS age INTEGER,
+        ADD COLUMN IF NOT EXISTS gender VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS occupation VARCHAR(200),
+        ADD COLUMN IF NOT EXISTS weight_kg DOUBLE PRECISION,
+        ADD COLUMN IF NOT EXISTS height_cm DOUBLE PRECISION,
+        ADD COLUMN IF NOT EXISTS training_experience_months INTEGER,
+        ADD COLUMN IF NOT EXISTS specific_goals_text VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS target_muscle_groups TEXT[],
+        ADD COLUMN IF NOT EXISTS days_per_week INTEGER,
+        ADD COLUMN IF NOT EXISTS session_duration_minutes INTEGER,
+        ADD COLUMN IF NOT EXISTS preferred_days INTEGER[],
+        ADD COLUMN IF NOT EXISTS has_gym_access BOOLEAN,
+        ADD COLUMN IF NOT EXISTS available_equipment TEXT[],
+        ADD COLUMN IF NOT EXISTS equipment_notes VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS injury_areas TEXT[],
+        ADD COLUMN IF NOT EXISTS injury_details TEXT,
+        ADD COLUMN IF NOT EXISTS excluded_exercises TEXT[],
+        ADD COLUMN IF NOT EXISTS medical_conditions TEXT[],
+        ADD COLUMN IF NOT EXISTS mobility_limitations VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS exercise_variety VARCHAR(20),
+        ADD COLUMN IF NOT EXISTS include_cardio BOOLEAN,
+        ADD COLUMN IF NOT EXISTS include_warmup BOOLEAN,
+        ADD COLUMN IF NOT EXISTS include_cooldown BOOLEAN,
+        ADD COLUMN IF NOT EXISTS preferred_training_style VARCHAR(200),
+        ADD COLUMN IF NOT EXISTS notes TEXT,
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITHOUT TIME ZONE;
+    """,
+    """
+    UPDATE training.client_interviews
+       SET days_per_week = COALESCE(days_per_week, days_available),
+           available_equipment = COALESCE(available_equipment, equipment_available),
+           injury_details = COALESCE(NULLIF(injury_details, ''), NULLIF(injuries, '')),
+           injury_areas = COALESCE(
+               injury_areas,
+               CASE
+                   WHEN NULLIF(injuries, '') IS NOT NULL THEN ARRAY['other']::text[]
+                   ELSE injury_areas
+               END
+           ),
+           exercise_variety = COALESCE(NULLIF(LOWER(exercise_variety), ''), 'medium'),
+           include_cardio = COALESCE(include_cardio, false),
+           include_warmup = COALESCE(include_warmup, true),
+           include_cooldown = COALESCE(include_cooldown, false),
+           created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+           updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP),
+           experience_level = COALESCE(NULLIF(LOWER(experience_level), ''), experience_level),
+           primary_goal = COALESCE(NULLIF(LOWER(primary_goal), ''), primary_goal),
+           gender = COALESCE(NULLIF(LOWER(gender), ''), gender);
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_training_client_interviews_client_id ON training.client_interviews (client_id);",
     "CREATE INDEX IF NOT EXISTS idx_training_macrocycles_trainer_client_status ON training.macrocycles (trainer_id, client_id, status);",
     "CREATE INDEX IF NOT EXISTS idx_training_mesocycles_macrocycle_block ON training.mesocycles (macrocycle_id, block_number);",
     "CREATE INDEX IF NOT EXISTS idx_training_microcycles_mesocycle_week ON training.microcycles (mesocycle_id, week_number);",

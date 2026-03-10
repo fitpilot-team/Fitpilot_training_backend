@@ -5,6 +5,7 @@ import type {
   AIGeneratorState,
   QuestionnaireAnswers,
   AIWorkoutRequest,
+  AIWorkoutResponse,
   FitnessLevel,
   PrimaryGoal,
   EquipmentType,
@@ -48,6 +49,7 @@ const initialAnswers: QuestionnaireAnswers = {
   exercise_variety: 'medium',
   include_cardio: false,
   include_warmup: true,
+  include_cooldown: false,
   preferred_training_style: '',
 
   // Duration defaults
@@ -100,25 +102,53 @@ type AIStore = AIGeneratorState & AIStoreActions;
 export const useAIStore = create<AIStore>()(
   devtools(
     persist(
-      (set, get) => ({
+      (set, get) => {
+        const buildRuntimeInitialState = () => ({
+          currentStep: 0,
+          answers: { ...initialAnswers },
+          isGenerating: false,
+          generatedWorkout: null,
+          isSaving: false,
+          error: null,
+          creationMode: null,
+          selectedClientId: null,
+          selectedClientName: null,
+          templateName: '',
+          isValidatingInterview: false,
+          interviewValidation: null,
+        });
+
+        const executeGeneration = async (
+          generateRequest: (request: AIWorkoutRequest) => Promise<AIWorkoutResponse>,
+          defaultError: string,
+          clientId?: string,
+        ) => {
+          const { answers, creationMode, selectedClientId, templateName } = get();
+          const effectiveClientId = clientId || selectedClientId;
+          set({ isGenerating: true, error: null });
+
+          try {
+            const normalizedAnswers = normalizeAnswers(answers);
+            set({ answers: normalizedAnswers });
+            const request = buildRequest(normalizedAnswers, effectiveClientId, creationMode, templateName);
+            const result = await generateRequest(request);
+
+            if (result.success) {
+              set({ generatedWorkout: result });
+            } else {
+              set({ error: result.error || defaultError });
+            }
+          } catch (error: any) {
+            set({ error: error.message || defaultError });
+          } finally {
+            set({ isGenerating: false });
+          }
+        };
+
+        return ({
         // Initial state
-        currentStep: 0,
-        answers: { ...initialAnswers },
+        ...buildRuntimeInitialState(),
         config: null,
-        isGenerating: false,
-        generatedWorkout: null,
-        isSaving: false,
-        error: null,
-
-        // Mode state
-        creationMode: null,
-        selectedClientId: null,
-        selectedClientName: null,
-        templateName: '',
-
-        // Validation state
-        isValidatingInterview: false,
-        interviewValidation: null,
 
         // Navigation actions
         nextStep: () => {
@@ -235,6 +265,12 @@ export const useAIStore = create<AIStore>()(
                 excluded_exercises: data.restrictions?.excluded_exercises?.join(', ') || '',
                 medical_conditions: data.restrictions?.medical_conditions?.join(', ') || '',
                 mobility_limitations: data.restrictions?.mobility_limitations || '',
+                // Preferences
+                exercise_variety: data.preferences?.exercise_variety || 'medium',
+                include_cardio: data.preferences?.include_cardio ?? false,
+                include_warmup: data.preferences?.include_warmup ?? true,
+                include_cooldown: data.preferences?.include_cooldown ?? false,
+                preferred_training_style: data.preferences?.preferred_training_style || '',
               },
               selectedClientId: clientId,
               selectedClientName: data.client_name,
@@ -250,74 +286,14 @@ export const useAIStore = create<AIStore>()(
         },
 
         // Generation actions
-        generateWorkout: async (clientId?: string) => {
-          const { answers, creationMode, selectedClientId, templateName } = get();
-          const effectiveClientId = clientId || selectedClientId;
-          set({ isGenerating: true, error: null });
+        generateWorkout: (clientId?: string) =>
+          executeGeneration(aiService.generateWorkout, 'Error generando programa', clientId),
 
-          try {
-            const normalizedAnswers = normalizeAnswers(answers);
-            set({ answers: normalizedAnswers });
-            const request = buildRequest(normalizedAnswers, effectiveClientId, creationMode, templateName);
-            const result = await aiService.generateWorkout(request);
+        generatePreview: (clientId?: string) =>
+          executeGeneration(aiService.generatePreview, 'Error generando preview', clientId),
 
-            if (result.success) {
-              set({ generatedWorkout: result });
-            } else {
-              set({ error: result.error || 'Error generando programa' });
-            }
-          } catch (error: any) {
-            set({ error: error.message || 'Error generando programa' });
-          } finally {
-            set({ isGenerating: false });
-          }
-        },
-
-        generatePreview: async (clientId?: string) => {
-          const { answers, creationMode, selectedClientId, templateName } = get();
-          const effectiveClientId = clientId || selectedClientId;
-          set({ isGenerating: true, error: null });
-
-          try {
-            const normalizedAnswers = normalizeAnswers(answers);
-            set({ answers: normalizedAnswers });
-            const request = buildRequest(normalizedAnswers, effectiveClientId, creationMode, templateName);
-            const result = await aiService.generatePreview(request);
-
-            if (result.success) {
-              set({ generatedWorkout: result });
-            } else {
-              set({ error: result.error || 'Error generando preview' });
-            }
-          } catch (error: any) {
-            set({ error: error.message || 'Error generando preview' });
-          } finally {
-            set({ isGenerating: false });
-          }
-        },
-
-        testGenerateWorkout: async (clientId?: string) => {
-          const { answers, creationMode, selectedClientId, templateName } = get();
-          const effectiveClientId = clientId || selectedClientId;
-          set({ isGenerating: true, error: null });
-
-          try {
-            const normalizedAnswers = normalizeAnswers(answers);
-            set({ answers: normalizedAnswers });
-            const request = buildRequest(normalizedAnswers, effectiveClientId, creationMode, templateName);
-            const result = await aiService.testGenerate(request);
-
-            if (result.success) {
-              set({ generatedWorkout: result });
-            } else {
-              set({ error: result.error || 'Error generando programa de prueba' });
-            }
-          } catch (error: any) {
-            set({ error: error.message || 'Error generando programa de prueba' });
-          } finally {
-            set({ isGenerating: false });
-          }
-        },
+        testGenerateWorkout: (clientId?: string) =>
+          executeGeneration(aiService.testGenerate, 'Error generando programa de prueba', clientId),
 
         saveWorkout: async (clientId?: string) => {
           const { answers, generatedWorkout, creationMode, selectedClientId, templateName } = get();
@@ -353,41 +329,16 @@ export const useAIStore = create<AIStore>()(
         },
 
         reset: () => {
-          set({
-            currentStep: 0,
-            answers: { ...initialAnswers },
-            isGenerating: false,
-            generatedWorkout: null,
-            isSaving: false,
-            error: null,
-            creationMode: null,
-            selectedClientId: null,
-            selectedClientName: null,
-            templateName: '',
-            isValidatingInterview: false,
-            interviewValidation: null,
-          });
+          set(buildRuntimeInitialState());
         },
 
         clearPersistedState: () => {
           // Clear localStorage and reset to initial state
           localStorage.removeItem('ai-generator-storage');
-          set({
-            currentStep: 0,
-            answers: { ...initialAnswers },
-            isGenerating: false,
-            generatedWorkout: null,
-            isSaving: false,
-            error: null,
-            creationMode: null,
-            selectedClientId: null,
-            selectedClientName: null,
-            templateName: '',
-            isValidatingInterview: false,
-            interviewValidation: null,
-          });
+          set(buildRuntimeInitialState());
         },
-      }),
+      });
+      },
       {
         name: 'ai-generator-storage',
         storage: createJSONStorage(() => localStorage),
@@ -493,7 +444,8 @@ function normalizeAnswers(answers: QuestionnaireAnswers): QuestionnaireAnswers {
     exercise_variety: answers.exercise_variety || 'medium',
     include_cardio: answers.include_cardio ?? false,
     include_warmup: answers.include_warmup ?? true,
-    preferred_training_style: (answers.preferred_training_style || '').trim(),
+    include_cooldown: answers.include_cooldown ?? false,
+    preferred_training_style: String(answers.preferred_training_style ?? '').trim(),
     // Duration
     total_weeks: totalWeeks,
     mesocycle_weeks: mesocycleWeeks,
@@ -568,7 +520,7 @@ function buildRequest(
       exercise_variety: normalized.exercise_variety,
       include_cardio: normalized.include_cardio,
       include_warmup: normalized.include_warmup,
-      include_cooldown: false,
+      include_cooldown: normalized.include_cooldown,
       preferred_training_style: normalized.preferred_training_style,
     },
     program_duration: {
