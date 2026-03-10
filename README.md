@@ -1,5 +1,12 @@
 # Fitpilot Training Backend
 
+## Frontend source of truth
+
+This repository no longer contains the React frontend (`src/`, Vite config, and frontend build files were removed).
+The only supported frontend codebase is:
+
+- https://github.com/fitpilot-team/FitPilot-frontend
+
 ## Auth compatibility (Nutrition -> Training)
 
 Training endpoints accept:
