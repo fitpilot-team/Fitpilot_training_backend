@@ -1,13 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from typing import Optional
 from models.base import get_db
 from models.user import User, UserRole
 from schemas.client import ClientCreate, ClientUpdate, ClientResponse, ClientListResponse
 from core.security import get_password_hash
-from core.dependencies import get_current_user
+from core.dependencies import assert_training_professional_access, get_current_user
 
 router = APIRouter()
+
+
+def _ensure_training_access(current_user: User) -> None:
+    assert_training_professional_access(current_user)
 
 
 @router.get("/", response_model=ClientListResponse)
@@ -20,24 +25,24 @@ def get_clients(
 ):
     """Get all clients (users with role=client)"""
 
-    # Only trainers and admins can view clients
-    if current_user.role not in [UserRole.TRAINER, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can view clients"
-        )
+    _ensure_training_access(current_user)
 
     query = db.query(User).filter(User.role == UserRole.CLIENT)
+    full_name_expr = func.trim(func.concat(User.name, " ", func.coalesce(User.lastname, "")))
 
     if search:
         search_filter = f"%{search}%"
         query = query.filter(
-            (User.full_name.ilike(search_filter)) |
-            (User.email.ilike(search_filter))
+            or_(
+                full_name_expr.ilike(search_filter),
+                User.name.ilike(search_filter),
+                User.lastname.ilike(search_filter),
+                User.email.ilike(search_filter),
+            )
         )
 
     total = query.count()
-    clients = query.order_by(User.full_name).offset(skip).limit(limit).all()
+    clients = query.order_by(User.name.asc(), User.lastname.asc()).offset(skip).limit(limit).all()
 
     return ClientListResponse(clients=clients, total=total)
 
@@ -50,12 +55,7 @@ def create_client(
 ):
     """Create a new client"""
 
-    # Only trainers and admins can create clients
-    if current_user.role not in [UserRole.TRAINER, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can create clients"
-        )
+    _ensure_training_access(current_user)
 
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == client_data.email).first()
@@ -91,12 +91,7 @@ def get_client(
 ):
     """Get a specific client by ID"""
 
-    # Only trainers and admins can view clients
-    if current_user.role not in [UserRole.TRAINER, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can view clients"
-        )
+    _ensure_training_access(current_user)
 
     client = db.query(User).filter(
         User.id == client_id,
@@ -121,12 +116,7 @@ def update_client(
 ):
     """Update a client's information"""
 
-    # Only trainers and admins can update clients
-    if current_user.role not in [UserRole.TRAINER, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can update clients"
-        )
+    _ensure_training_access(current_user)
 
     client = db.query(User).filter(
         User.id == client_id,
@@ -159,12 +149,7 @@ def delete_client(
 ):
     """Delete a client"""
 
-    # Only trainers and admins can delete clients
-    if current_user.role not in [UserRole.TRAINER, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can delete clients"
-        )
+    _ensure_training_access(current_user)
 
     client = db.query(User).filter(
         User.id == client_id,

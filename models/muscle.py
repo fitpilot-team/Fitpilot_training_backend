@@ -2,12 +2,12 @@
 Muscle model for FitPilot.
 Represents individual muscle groups that can be targeted by exercises.
 """
-from sqlalchemy import Column, String, Integer, DateTime
+import enum
+
+from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
-from datetime import datetime
-import uuid
-import enum
+
 from models.base import Base
 
 
@@ -40,17 +40,18 @@ class Muscle(Base):
     - SVG element IDs for BodyMap visualization
     """
     __tablename__ = "muscles"
+    __table_args__ = {"schema": "training"}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), nullable=False, unique=True, index=True)
-    display_name_es = Column(String(100), nullable=False)
-    display_name_en = Column(String(100), nullable=False)
-    body_region = Column(String(50), nullable=False)
-    muscle_category = Column(String(50), nullable=False)
+    display_name_es = Column(String(100), nullable=True)
+    display_name_en = Column(String(100), nullable=True)
+    body_region = Column(String(50), nullable=True)
+    muscle_category = Column(String(50), nullable=True)
     svg_ids = Column(ARRAY(String), nullable=True)  # Array of SVG element IDs for BodyMap
     sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
 
     # Relationships
     exercise_muscles = relationship("ExerciseMuscle", back_populates="muscle")

@@ -1,14 +1,29 @@
-from pydantic import BaseModel, Field
-from datetime import date, datetime
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from datetime import date, datetime, timezone
 from typing import Optional, List
 from models.mesocycle import MesocycleStatus, IntensityLevel, EffortType, TempoType, SetType, ExercisePhase
 from schemas.exercise import ExerciseResponse
 
 
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _normalize_created_at(value: Optional[datetime]) -> datetime:
+    return value or _now_utc()
+
+
+def _normalize_updated_at(value: Optional[datetime], info: ValidationInfo) -> datetime:
+    if value is not None:
+        return value
+    created_at = info.data.get("created_at") if info.data else None
+    return created_at or _now_utc()
+
+
 # =============== DayExercise Schemas ===============
 
 class DayExerciseBase(BaseModel):
-    exercise_id: str
+    exercise_id: int
     order_index: int = Field(ge=0, description="Order of exercise in the training day")
     phase: ExercisePhase = ExercisePhase.MAIN
     sets: int = Field(ge=1, le=20, description="Number of sets")
@@ -41,7 +56,7 @@ class DayExerciseCreate(DayExerciseBase):
 
 
 class DayExerciseUpdate(BaseModel):
-    exercise_id: Optional[str] = None
+    exercise_id: Optional[int] = None
     order_index: Optional[int] = Field(None, ge=0)
     phase: Optional[ExercisePhase] = None
     sets: Optional[int] = Field(None, ge=1, le=20)
@@ -70,14 +85,23 @@ class DayExerciseUpdate(BaseModel):
 
 
 class DayExerciseResponse(DayExerciseBase):
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     training_day_id: str
     exercise: Optional[ExerciseResponse] = None
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def validate_created_at(cls, value: Optional[datetime]) -> datetime:
+        return _normalize_created_at(value)
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def validate_updated_at(cls, value: Optional[datetime], info: ValidationInfo) -> datetime:
+        return _normalize_updated_at(value, info)
 
 
 # =============== TrainingDay Schemas ===============
@@ -105,14 +129,23 @@ class TrainingDayUpdate(BaseModel):
 
 
 class TrainingDayResponse(TrainingDayBase):
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     microcycle_id: str
     exercises: List[DayExerciseResponse] = []
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def validate_created_at(cls, value: Optional[datetime]) -> datetime:
+        return _normalize_created_at(value)
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def validate_updated_at(cls, value: Optional[datetime], info: ValidationInfo) -> datetime:
+        return _normalize_updated_at(value, info)
 
 
 # =============== Microcycle Schemas ===============
@@ -140,14 +173,23 @@ class MicrocycleUpdate(BaseModel):
 
 
 class MicrocycleResponse(MicrocycleBase):
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     mesocycle_id: str
     training_days: List[TrainingDayResponse] = []
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def validate_created_at(cls, value: Optional[datetime]) -> datetime:
+        return _normalize_created_at(value)
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def validate_updated_at(cls, value: Optional[datetime], info: ValidationInfo) -> datetime:
+        return _normalize_updated_at(value, info)
 
 
 # =============== Mesocycle Schemas ===============
@@ -177,14 +219,23 @@ class MesocycleUpdate(BaseModel):
 
 
 class MesocycleResponse(MesocycleBase):
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     macrocycle_id: str
     microcycles: List[MicrocycleResponse] = []
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def validate_created_at(cls, value: Optional[datetime]) -> datetime:
+        return _normalize_created_at(value)
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def validate_updated_at(cls, value: Optional[datetime], info: ValidationInfo) -> datetime:
+        return _normalize_updated_at(value, info)
 
 
 class MesocycleListResponse(BaseModel):
@@ -200,7 +251,7 @@ class MacrocycleBase(BaseModel):
     objective: str = Field(min_length=1, max_length=200, description="Training objective (e.g., 'hypertrophy', 'strength')")
     start_date: date
     end_date: date
-    client_id: Optional[str] = None  # NULL = template, not assigned to client
+    client_id: Optional[int] = None  # NULL = template, not assigned to client
 
 
 class MacrocycleCreate(MacrocycleBase):
@@ -217,6 +268,8 @@ class MacrocycleUpdate(BaseModel):
 
 
 class MacrocycleResponse(MacrocycleBase):
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     status: MesocycleStatus
     trainer_id: str
@@ -224,8 +277,15 @@ class MacrocycleResponse(MacrocycleBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def validate_created_at(cls, value: Optional[datetime]) -> datetime:
+        return _normalize_created_at(value)
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def validate_updated_at(cls, value: Optional[datetime], info: ValidationInfo) -> datetime:
+        return _normalize_updated_at(value, info)
 
 
 class MacrocycleListResponse(BaseModel):

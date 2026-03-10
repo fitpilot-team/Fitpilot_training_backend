@@ -2,11 +2,10 @@
 Exercise model for FitPilot.
 Represents exercises in the exercise library.
 """
-from sqlalchemy import Column, String, Text, Enum, DateTime, Integer, Float
+from sqlalchemy import Column, DateTime, Enum, Float, Integer, String, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
 import enum
-import uuid
+
 from models.base import Base
 
 
@@ -63,10 +62,19 @@ class Exercise(Base):
     Supports bilingual content (Spanish/English) for name and description.
     """
     __tablename__ = "exercises"
+    __table_args__ = {"schema": "training"}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    type = Column(Enum(ExerciseType), nullable=False)
-    resistance_profile = Column(Enum(ResistanceProfile), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(
+        Enum(
+            ExerciseType,
+            name="exercise_type",
+            schema="training",
+            values_callable=lambda enum_type: [e.value for e in enum_type],
+        ),
+        nullable=False,
+    )
+    resistance_profile = Column(String, nullable=False)
     category = Column(String, nullable=False)
     video_url = Column(String)  # Video URL from ExerciseDB or custom
     thumbnail_url = Column(String)  # Movement pattern image (GIF/PNG showing exercise execution)
@@ -83,7 +91,7 @@ class Exercise(Base):
         index=True
     )
     cardio_subclass = Column(
-        Enum(CardioSubclass, values_callable=lambda x: [e.value for e in x]),
+        String,
         nullable=True  # Solo aplica cuando exercise_class == CARDIO
     )
 
@@ -93,8 +101,8 @@ class Exercise(Base):
     target_heart_rate_max = Column(Integer, nullable=True)  # BPM máximo objetivo
     calories_per_minute = Column(Float, nullable=True)  # Calorías quemadas por minuto
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
 
     # Campos bilingües para nombre
     name_en = Column(String, nullable=False, index=True)  # Nombre en inglés (principal)
@@ -119,7 +127,7 @@ class Exercise(Base):
             {
                 "muscle_id": em.muscle.id,
                 "muscle_name": em.muscle.name,
-                "muscle_display_name": em.muscle.display_name_es,
+                "muscle_display_name": em.muscle.display_name_es or em.muscle.display_name_en,
                 "muscle_category": em.muscle.muscle_category,
                 "role": em.muscle_role
             }
@@ -133,7 +141,7 @@ class Exercise(Base):
             {
                 "muscle_id": em.muscle.id,
                 "muscle_name": em.muscle.name,
-                "muscle_display_name": em.muscle.display_name_es,
+                "muscle_display_name": em.muscle.display_name_es or em.muscle.display_name_en,
                 "muscle_category": em.muscle.muscle_category,
                 "role": em.muscle_role
             }
