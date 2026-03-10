@@ -222,6 +222,38 @@ class AIWorkoutRequest(BaseModel):
     )
 
 
+# =============== Interview Preload Response ===============
+
+class InterviewDataResponse(BaseModel):
+    client_id: str
+    client_name: str
+    user_profile: UserProfile
+    goals: TrainingGoals
+    availability: Availability
+    equipment: Equipment
+    restrictions: Optional[Restrictions] = None
+    preferences: Optional[Preferences] = None
+
+
+class ExerciseCatalogItem(BaseModel):
+    """Ejercicio serializado para el prompt del generador IA."""
+
+    id: int
+    name: str
+    type: str = "multiarticular"
+    category: Optional[str] = None
+    primary_muscles: List[str] = Field(default_factory=list)
+    secondary_muscles: List[str] = Field(default_factory=list)
+    difficulty_level: Optional[str] = None
+    equipment_needed: Optional[str] = None
+    resistance_profile: Optional[str] = None
+    exercise_class: str = "strength"
+    cardio_subclass: Optional[str] = None
+    intensity_zone: Optional[int] = None
+    target_heart_rate_min: Optional[int] = None
+    target_heart_rate_max: Optional[int] = None
+    calories_per_minute: Optional[float] = None
+
 # =============== Schemas de Respuesta Generada ===============
 
 class ExerciseClassType(str, Enum):
@@ -498,3 +530,4 @@ class SaveWorkoutRequest(AIWorkoutRequest):
 # Rebuild models with forward references after all classes are defined
 AIWorkoutRequest.model_rebuild()
 SaveWorkoutRequest.model_rebuild()
+

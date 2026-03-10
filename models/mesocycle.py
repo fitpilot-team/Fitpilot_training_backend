@@ -1,8 +1,19 @@
-from sqlalchemy import Column, String, Text, Integer, Boolean, Date, DateTime, ForeignKey, Enum, Float
-from sqlalchemy.orm import relationship
-from datetime import datetime
 import enum
-import uuid
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import relationship
+
 from models.base import Base
 
 
@@ -27,45 +38,53 @@ class EffortType(str, enum.Enum):
 
 
 class TempoType(str, enum.Enum):
-    CONTROLLED = "controlled"  # 3-1-2-0 - Emphasis on eccentric
-    EXPLOSIVE = "explosive"    # 2-0-1-0 - Maximum speed on concentric
-    TUT = "tut"                # 4-1-3-1 - Time Under Tension
-    STANDARD = "standard"      # 2-0-2-0 - Balanced rhythm
-    PAUSE_REP = "pause_rep"    # 2-2-2-0 - Pause at max tension
+    CONTROLLED = "controlled"
+    EXPLOSIVE = "explosive"
+    TUT = "tut"
+    STANDARD = "standard"
+    PAUSE_REP = "pause_rep"
 
 
 class SetType(str, enum.Enum):
-    STRAIGHT = "straight"      # Standard sets with full rest
-    REST_PAUSE = "rest_pause"  # Brief pauses to extend the set
-    DROP_SET = "drop_set"      # Weight reduction without rest
-    TOP_SET = "top_set"        # Main set with maximum effort
-    BACKOFF = "backoff"        # Unloading sets with less weight
-    MYO_REPS = "myo_reps"      # Activation set + mini-sets
-    CLUSTER = "cluster"        # Intra-set micro-pauses
+    STRAIGHT = "straight"
+    REST_PAUSE = "rest_pause"
+    DROP_SET = "drop_set"
+    TOP_SET = "top_set"
+    BACKOFF = "backoff"
+    MYO_REPS = "myo_reps"
+    CLUSTER = "cluster"
 
 
 class ExercisePhase(str, enum.Enum):
-    WARMUP = "warmup"      # Calentamiento
-    MAIN = "main"          # Entrenamiento principal
-    COOLDOWN = "cooldown"  # Enfriamiento
+    WARMUP = "warmup"
+    MAIN = "main"
+    COOLDOWN = "cooldown"
 
 
 class Macrocycle(Base):
     __tablename__ = "macrocycles"
+    __table_args__ = {"schema": "training"}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    description = Column(Text)
-    objective = Column(String, nullable=False)  # hypertrophy, strength, endurance, etc.
+    description = Column(Text, nullable=True)
+    objective = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    status = Column(Enum(MesocycleStatus), default=MesocycleStatus.DRAFT, nullable=False)
-    trainer_id = Column(String, ForeignKey("users.id"), nullable=False)
-    client_id = Column(String, ForeignKey("users.id"), nullable=True)  # NULL = template, not assigned to client
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    status = Column(
+        Enum(
+            MesocycleStatus,
+            values_callable=lambda enum_type: [e.value for e in enum_type],
+            native_enum=False,
+        ),
+        default=MesocycleStatus.DRAFT,
+        nullable=False,
+    )
+    trainer_id = Column(Integer, ForeignKey("public.users.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("public.users.id"), nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
 
-    # Relationships
     trainer = relationship("User", foreign_keys=[trainer_id], back_populates="created_macrocycles")
     client = relationship("User", foreign_keys=[client_id], back_populates="assigned_macrocycles")
     mesocycles = relationship("Mesocycle", back_populates="macrocycle", cascade="all, delete-orphan")
@@ -75,22 +94,21 @@ class Macrocycle(Base):
 
 
 class Mesocycle(Base):
-    """A mesocycle represents a training block within a macrocycle (typically 3-6 weeks)"""
     __tablename__ = "mesocycles"
+    __table_args__ = {"schema": "training"}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    macrocycle_id = Column(String, ForeignKey("macrocycles.id"), nullable=False)
-    block_number = Column(Integer, nullable=False)  # Order within the macrocycle
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    macrocycle_id = Column(Integer, ForeignKey("training.macrocycles.id"), nullable=False)
+    block_number = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
-    description = Column(Text)
+    description = Column(Text, nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    focus = Column(String)  # e.g., "Hypertrophy", "Strength", "Peaking", "Deload"
-    notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    focus = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
 
-    # Relationships
     macrocycle = relationship("Macrocycle", back_populates="mesocycles")
     microcycles = relationship("Microcycle", back_populates="mesocycle", cascade="all, delete-orphan")
 
@@ -100,19 +118,27 @@ class Mesocycle(Base):
 
 class Microcycle(Base):
     __tablename__ = "microcycles"
+    __table_args__ = {"schema": "training"}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    mesocycle_id = Column(String, ForeignKey("mesocycles.id"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    mesocycle_id = Column(Integer, ForeignKey("training.mesocycles.id"), nullable=False)
     week_number = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    intensity_level = Column(Enum(IntensityLevel), default=IntensityLevel.MEDIUM, nullable=False)
-    notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    intensity_level = Column(
+        Enum(
+            IntensityLevel,
+            values_callable=lambda enum_type: [e.value for e in enum_type],
+            native_enum=False,
+        ),
+        default=IntensityLevel.MEDIUM,
+        nullable=False,
+    )
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
 
-    # Relationships
     mesocycle = relationship("Mesocycle", back_populates="microcycles")
     training_days = relationship("TrainingDay", back_populates="microcycle", cascade="all, delete-orphan")
 
@@ -122,19 +148,19 @@ class Microcycle(Base):
 
 class TrainingDay(Base):
     __tablename__ = "training_days"
+    __table_args__ = {"schema": "training"}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    microcycle_id = Column(String, ForeignKey("microcycles.id"), nullable=False)
-    day_number = Column(Integer, nullable=False)  # 1-7 (Monday-Sunday)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    microcycle_id = Column(Integer, ForeignKey("training.microcycles.id"), nullable=False)
+    day_number = Column(Integer, nullable=False)
     date = Column(Date, nullable=False)
-    name = Column(String, nullable=False)  # e.g., "Upper Body Push", "Leg Day"
-    focus = Column(String)  # e.g., "Chest & Triceps"
-    rest_day = Column(Boolean, default=False, nullable=False)
-    notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    name = Column(String, nullable=False)
+    focus = Column(String, nullable=True)
+    rest_day = Column("is_rest_day", Boolean, default=False, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
 
-    # Relationships
     microcycle = relationship("Microcycle", back_populates="training_days")
     exercises = relationship("DayExercise", back_populates="training_day", cascade="all, delete-orphan")
 
@@ -144,44 +170,56 @@ class TrainingDay(Base):
 
 class DayExercise(Base):
     __tablename__ = "day_exercises"
+    __table_args__ = {"schema": "training"}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    training_day_id = Column(String, ForeignKey("training_days.id"), nullable=False)
-    exercise_id = Column(String, ForeignKey("exercises.id"), nullable=False)
-    order_index = Column(Integer, nullable=False)  # Order within the day
-    phase = Column(Enum(ExercisePhase), default=ExercisePhase.MAIN, nullable=False)  # warmup, main, cooldown
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    training_day_id = Column(Integer, ForeignKey("training.training_days.id"), nullable=False)
+    exercise_id = Column(Integer, ForeignKey("training.exercises.id"), nullable=False)
+    order_index = Column(Integer, nullable=False)
+    phase = Column(
+        Enum(
+            ExercisePhase,
+            values_callable=lambda enum_type: [e.value for e in enum_type],
+            native_enum=False,
+        ),
+        default=ExercisePhase.MAIN,
+        nullable=False,
+    )
 
-    # Campos para ejercicios de FUERZA
     sets = Column(Integer, nullable=False)
-    reps_min = Column(Integer, nullable=True)  # Nullable para ejercicios basados en tiempo
-    reps_max = Column(Integer, nullable=True)  # Nullable para ejercicios basados en tiempo
+    reps_min = Column(Integer, nullable=True)
+    reps_max = Column(Integer, nullable=True)
     rest_seconds = Column(Integer, nullable=False)
-    effort_type = Column(Enum(EffortType), nullable=False)
-    effort_value = Column(Float, nullable=False)  # RIR value, RPE value, or percentage
-    tempo = Column(String)  # TempoType value or legacy tempo string (e.g., "3-1-1-0")
-    set_type = Column(String)  # SetType value (e.g., "straight", "drop_set")
+    effort_type = Column(
+        Enum(
+            EffortType,
+            values_callable=lambda enum_type: [e.value for e in enum_type],
+            native_enum=False,
+        ),
+        nullable=False,
+    )
+    effort_value = Column(Float, nullable=False)
+    tempo = Column(String, nullable=True)
+    set_type = Column(String, nullable=True)
 
-    # Campos para ejercicios de CARDIO (LISS/MISS/HIIT)
-    duration_seconds = Column(Integer, nullable=True)  # Duración total (30-3600 segundos)
-    intensity_zone = Column(Integer, nullable=True)  # Zona de frecuencia cardíaca (1-5)
-    distance_meters = Column(Integer, nullable=True)  # Distancia objetivo en metros
-    target_calories = Column(Integer, nullable=True)  # Calorías objetivo
+    duration_seconds = Column(Integer, nullable=True)
+    intensity_zone = Column(Integer, nullable=True)
+    distance_meters = Column(Integer, nullable=True)
+    target_calories = Column(Integer, nullable=True)
+    intervals = Column(Integer, nullable=True)
+    work_seconds = Column(Integer, nullable=True)
+    interval_rest_seconds = Column(Integer, nullable=True)
 
-    # Campos específicos para HIIT
-    intervals = Column(Integer, nullable=True)  # Número de intervalos
-    work_seconds = Column(Integer, nullable=True)  # Duración del intervalo de trabajo
-    interval_rest_seconds = Column(Integer, nullable=True)  # Descanso entre intervalos
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+    rpe_target = Column(Float, nullable=True)  # legacy compatibility
 
-    notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-
-    # Relationships
     training_day = relationship("TrainingDay", back_populates="exercises")
     exercise = relationship("Exercise", back_populates="day_exercises")
 
     def __repr__(self):
-        exercise_name = self.exercise.name_en if self.exercise else 'Unknown'
+        exercise_name = self.exercise.name_en if self.exercise else "Unknown"
         if self.duration_seconds:
             return f"<DayExercise {exercise_name}: {self.sets}x{self.duration_seconds}s>"
         return f"<DayExercise {exercise_name}: {self.sets}x{self.reps_min}-{self.reps_max}>"

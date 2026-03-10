@@ -1,10 +1,11 @@
 from models.base import Base, get_db
-from models.user import User, UserRole
+from models.user import User, UserRole, UserProfessionalRole, ProfessionalRole
 from models.muscle import Muscle, BodyRegion, MuscleCategory
 from models.exercise_muscle import ExerciseMuscle, MuscleRole
 from models.exercise import Exercise, ExerciseType, ResistanceProfile
 from models.mesocycle import (
     Macrocycle,
+    Mesocycle,
     Microcycle,
     TrainingDay,
     DayExercise,
@@ -22,6 +23,8 @@ __all__ = [
     "get_db",
     "User",
     "UserRole",
+    "UserProfessionalRole",
+    "ProfessionalRole",
     "Muscle",
     "BodyRegion",
     "MuscleCategory",
@@ -31,6 +34,7 @@ __all__ = [
     "ExerciseType",
     "ResistanceProfile",
     "Macrocycle",
+    "Mesocycle",
     "Microcycle",
     "TrainingDay",
     "DayExercise",

@@ -1,45 +1,42 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from typing import Optional
 from models.base import get_db
 from models.user import User
-from models.mesocycle import Macrocycle, Microcycle, TrainingDay, DayExercise, IntensityLevel
+from models.mesocycle import Microcycle, TrainingDay, DayExercise, IntensityLevel
 from schemas.mesocycle import (
     MicrocycleCreate, MicrocycleUpdate, MicrocycleResponse
 )
-from core.dependencies import get_current_user
+from core.dependencies import (
+    assert_macrocycle_access,
+    assert_training_professional_access,
+    get_macrocycle_or_404,
+    get_current_user,
+)
 
 router = APIRouter()
 
 
-def verify_macrocycle_access(db: Session, macrocycle_id: str, current_user: User):
+def verify_macrocycle_access(db: Session, macrocycle_id: int, current_user: User):
     """Verify user has access to the macrocycle"""
-    macrocycle = db.query(Macrocycle).filter(Macrocycle.id == macrocycle_id).first()
-
-    if not macrocycle:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Macrocycle with id {macrocycle_id} not found"
-        )
-
-    # Check permissions
-    if current_user.role.value == "client" and macrocycle.client_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this macrocycle"
-        )
-    elif current_user.role.value == "trainer" and macrocycle.trainer_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this macrocycle"
-        )
-
+    macrocycle = get_macrocycle_or_404(db, macrocycle_id)
+    assert_macrocycle_access(
+        macrocycle=macrocycle,
+        current_user=current_user,
+        forbidden_detail="Not authorized to access this macrocycle",
+    )
     return macrocycle
+
+
+def get_microcycle_with_access(db: Session, microcycle_id: int, current_user: User) -> Microcycle:
+    """Get a microcycle and verify the current user can access its parent macrocycle."""
+    microcycle = get_microcycle_or_404(db, microcycle_id)
+    verify_macrocycle_access(db, microcycle.macrocycle_id, current_user)
+    return microcycle
 
 
 @router.get("/macrocycle/{macrocycle_id}", response_model=list[MicrocycleResponse])
 def list_microcycles_by_macrocycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -57,28 +54,17 @@ def list_microcycles_by_macrocycle(
 
 @router.get("/{microcycle_id}", response_model=MicrocycleResponse)
 def get_microcycle(
-    microcycle_id: str,
+    microcycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific microcycle by ID with all nested data"""
-    microcycle = db.query(Microcycle).filter(Microcycle.id == microcycle_id).first()
-
-    if not microcycle:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Microcycle with id {microcycle_id} not found"
-        )
-
-    # Verify access through parent macrocycle
-    verify_macrocycle_access(db, microcycle.macrocycle_id, current_user)
-
-    return microcycle
+    return get_microcycle_with_access(db, microcycle_id, current_user)
 
 
 @router.post("/macrocycle/{macrocycle_id}", response_model=MicrocycleResponse, status_code=status.HTTP_201_CREATED)
 def create_microcycle(
-    macrocycle_id: str,
+    macrocycle_id: int,
     microcycle_data: MicrocycleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -88,12 +74,7 @@ def create_microcycle(
 
     Only trainers and admins can create microcycles
     """
-    # Only trainers and admins can create microcycles
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can create microcycles"
-        )
+    assert_training_professional_access(current_user)
 
     # Verify macrocycle exists and user has access
     macrocycle = verify_macrocycle_access(db, macrocycle_id, current_user)
@@ -133,7 +114,7 @@ def create_microcycle(
 
 @router.put("/{microcycle_id}", response_model=MicrocycleResponse)
 def update_microcycle(
-    microcycle_id: str,
+    microcycle_id: int,
     microcycle_data: MicrocycleUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -143,22 +124,9 @@ def update_microcycle(
 
     Only trainers and admins can update microcycles
     """
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can update microcycles"
-        )
+    assert_training_professional_access(current_user)
 
-    microcycle = db.query(Microcycle).filter(Microcycle.id == microcycle_id).first()
-
-    if not microcycle:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Microcycle with id {microcycle_id} not found"
-        )
-
-    # Verify access through parent macrocycle
-    verify_macrocycle_access(db, microcycle.macrocycle_id, current_user)
+    microcycle = get_microcycle_with_access(db, microcycle_id, current_user)
 
     # Update only provided fields
     update_data = microcycle_data.model_dump(exclude_unset=True)
@@ -173,7 +141,7 @@ def update_microcycle(
 
 @router.delete("/{microcycle_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_microcycle(
-    microcycle_id: str,
+    microcycle_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -183,22 +151,9 @@ def delete_microcycle(
     This will cascade delete all associated training days and exercises
     Only trainers and admins can delete microcycles
     """
-    if current_user.role.value not in ["trainer", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only trainers and admins can delete microcycles"
-        )
+    assert_training_professional_access(current_user)
 
-    microcycle = db.query(Microcycle).filter(Microcycle.id == microcycle_id).first()
-
-    if not microcycle:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Microcycle with id {microcycle_id} not found"
-        )
-
-    # Verify access through parent macrocycle
-    verify_macrocycle_access(db, microcycle.macrocycle_id, current_user)
+    microcycle = get_microcycle_with_access(db, microcycle_id, current_user)
 
     db.delete(microcycle)
     db.commit()

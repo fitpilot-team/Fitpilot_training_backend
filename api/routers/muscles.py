@@ -2,12 +2,13 @@
 API router for Muscle endpoints.
 Provides read-only access to the muscle catalog.
 """
-from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
 from models import Muscle, get_db
-from schemas.muscle import MuscleResponse, MuscleListResponse
+from schemas.muscle import MuscleListResponse, MuscleResponse
 
 router = APIRouter()
 
@@ -18,12 +19,7 @@ def list_muscles(
     category: Optional[str] = Query(None, description="Filter by muscle category (chest, back, shoulders, arms, legs, core)"),
     body_region: Optional[str] = Query(None, description="Filter by body region (upper_body, lower_body, core)"),
 ):
-    """
-    List all muscles with optional filters.
-
-    Muscles are ordered by sort_order for consistent display.
-    """
-    query = db.query(Muscle).order_by(Muscle.sort_order)
+    query = db.query(Muscle).order_by(Muscle.sort_order, Muscle.id)
 
     if category:
         query = query.filter(Muscle.muscle_category == category)
@@ -32,27 +28,19 @@ def list_muscles(
         query = query.filter(Muscle.body_region == body_region)
 
     muscles = query.all()
-
-    return MuscleListResponse(
-        total=len(muscles),
-        muscles=muscles
-    )
+    return MuscleListResponse(total=len(muscles), muscles=muscles)
 
 
-@router.get("/{muscle_id}", response_model=MuscleResponse)
-def get_muscle(
-    muscle_id: str,
-    db: Session = Depends(get_db),
-):
-    """
-    Get a specific muscle by ID.
-    """
-    muscle = db.query(Muscle).filter(Muscle.id == muscle_id).first()
+@router.get("/categories/list", response_model=list[str])
+def list_categories(db: Session = Depends(get_db)):
+    categories = db.query(Muscle.muscle_category).distinct().all()
+    return [c[0] for c in categories if c[0]]
 
-    if not muscle:
-        raise HTTPException(status_code=404, detail="Músculo no encontrado")
 
-    return muscle
+@router.get("/regions/list", response_model=list[str])
+def list_body_regions(db: Session = Depends(get_db)):
+    regions = db.query(Muscle.body_region).distinct().all()
+    return [r[0] for r in regions if r[0]]
 
 
 @router.get("/by-name/{muscle_name}", response_model=MuscleResponse)
@@ -60,34 +48,18 @@ def get_muscle_by_name(
     muscle_name: str,
     db: Session = Depends(get_db),
 ):
-    """
-    Get a specific muscle by name.
-    """
     muscle = db.query(Muscle).filter(Muscle.name == muscle_name).first()
-
     if not muscle:
-        raise HTTPException(status_code=404, detail="Músculo no encontrado")
-
+        raise HTTPException(status_code=404, detail="MÃºsculo no encontrado")
     return muscle
 
 
-@router.get("/categories/list", response_model=list[str])
-def list_categories(
+@router.get("/{muscle_id}", response_model=MuscleResponse)
+def get_muscle(
+    muscle_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    List all unique muscle categories.
-    """
-    categories = db.query(Muscle.muscle_category).distinct().all()
-    return [c[0] for c in categories]
-
-
-@router.get("/regions/list", response_model=list[str])
-def list_body_regions(
-    db: Session = Depends(get_db),
-):
-    """
-    List all unique body regions.
-    """
-    regions = db.query(Muscle.body_region).distinct().all()
-    return [r[0] for r in regions]
+    muscle = db.query(Muscle).filter(Muscle.id == muscle_id).first()
+    if not muscle:
+        raise HTTPException(status_code=404, detail="MÃºsculo no encontrado")
+    return muscle

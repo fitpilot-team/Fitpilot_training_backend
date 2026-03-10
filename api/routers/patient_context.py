@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from core.dependencies import get_current_user
+from core.dependencies import (
+    assert_training_professional_access,
+    get_current_user,
+    get_effective_user_role,
+)
 from models.base import get_db
 from models.user import User, UserRole
 from services.patient_context import build_patient_context, save_patient_context_snapshot
@@ -22,11 +26,7 @@ def get_patient_context(
 
     No persiste datos nuevos; sirve para IA y revisión clínica rápida.
     """
-    if current_user.role not in [UserRole.TRAINER, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo entrenadores o admins pueden consultar el contexto de pacientes"
-        )
+    assert_training_professional_access(current_user)
 
     context = build_patient_context(db, client_id)
     if not context:
@@ -47,11 +47,7 @@ def create_patient_context_snapshot(
     """
     Guarda un snapshot versionado de PatientContext.
     """
-    if current_user.role not in [UserRole.TRAINER, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo entrenadores o admins pueden guardar el contexto de pacientes"
-        )
+    assert_training_professional_access(current_user)
 
     snapshot = save_patient_context_snapshot(
         db=db,
@@ -74,7 +70,7 @@ def get_my_patient_context(
     """
     Permite que un cliente vea su propio contexto (sin exponer PII a otros).
     """
-    if current_user.role != UserRole.CLIENT:
+    if get_effective_user_role(current_user) != UserRole.CLIENT.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo clientes pueden consultar su propio contexto"

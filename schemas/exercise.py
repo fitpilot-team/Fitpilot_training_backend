@@ -1,7 +1,7 @@
 """
 Pydantic schemas for Exercise.
 """
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from datetime import datetime
 from typing import Optional, List
 from models.exercise import (
@@ -151,14 +151,13 @@ class ExerciseUpdate(BaseModel):
 
 class ExerciseResponse(ExerciseBase):
     """Response schema for Exercise with muscle relationships."""
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     primary_muscles: List[ExerciseMuscleResponse]
     secondary_muscles: List[ExerciseMuscleResponse]
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ExerciseListResponse(BaseModel):

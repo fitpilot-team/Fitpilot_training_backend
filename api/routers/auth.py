@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-from datetime import timedelta
 from pathlib import Path
 import uuid
 import shutil
@@ -9,9 +8,8 @@ from models.base import get_db
 from models.user import User, UserRole
 from schemas.auth import LoginRequest, RegisterRequest, Token
 from schemas.user import UserResponse, UserUpdate, PasswordChange
-from core.security import verify_password, get_password_hash, create_access_token
+from core.security import verify_password, get_password_hash
 from core.dependencies import get_current_user
-from core.config import settings
 
 router = APIRouter()
 
@@ -55,32 +53,14 @@ def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
-    """Login and get access token"""
-
-    # Find user by email
-    user = db.query(User).filter(User.email == credentials.email).first()
-
-    if not user or not verify_password(credentials.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
-        )
-
-    # Create access token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.id, "email": user.email, "role": user.role.value},
-        expires_delta=access_token_expires
+    """
+    Deprecated local login endpoint.
+    Training API now only accepts Nutrition-issued tokens.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Training local login is deprecated. Authenticate via Nutrition /v1/auth/login and reuse that Bearer token.",
     )
-
-    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -101,6 +81,7 @@ def update_current_user(
     # Handle password separately if provided
     if "password" in update_data:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+    update_data.pop("preferred_language", None)
 
     for field, value in update_data.items():
         setattr(current_user, field, value)

@@ -2,47 +2,72 @@
 API router for Exercise endpoints.
 Provides CRUD operations for exercises with muscle relationships.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
-from sqlalchemy.orm import Session, joinedload
-from typing import Optional, List
-import os
-import uuid
-import shutil
+from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
+from typing import List, Optional
 
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from sqlalchemy.orm import Session, joinedload
+
+from core.dependencies import require_trainer
 from models.base import get_db
-from models.user import User
-from models.exercise import Exercise, ExerciseType, ResistanceProfile, ExerciseClass, CardioSubclass
-from models.muscle import Muscle
+from models.exercise import CardioSubclass, Exercise, ExerciseClass, ExerciseType, ResistanceProfile
 from models.exercise_muscle import ExerciseMuscle
-from schemas.exercise import ExerciseCreate, ExerciseUpdate, ExerciseResponse, ExerciseListResponse
+from models.muscle import Muscle
+from models.user import User
+from schemas.exercise import ExerciseCreate, ExerciseListResponse, ExerciseResponse, ExerciseUpdate
 from schemas.muscle import ExerciseMuscleResponse
-from core.dependencies import get_current_user, require_trainer
+from services.exercise_media_storage import (
+    StorageError,
+    delete_exercise_media,
+    upload_exercise_media,
+)
 
 router = APIRouter()
 
-# Configure upload directory
-UPLOAD_DIR = Path(__file__).parent.parent.parent / "static" / "exercises"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 MAX_FILE_SIZE_MB = 5
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 
+def _enum_value(value):
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _safe_muscle_display_name(muscle: Muscle) -> str:
+    return muscle.display_name_es or muscle.display_name_en or muscle.name
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _resolve_response_timestamps(exercise: Exercise) -> tuple[datetime, datetime]:
+    """
+    Return non-null timestamps for API responses.
+    Keeps response schema stable even for legacy rows with missing dates.
+    """
+    created_at = exercise.created_at or exercise.updated_at or _utcnow_naive()
+    updated_at = exercise.updated_at or created_at
+    return created_at, updated_at
+
+
 def build_exercise_response(exercise: Exercise) -> dict:
-    """
-    Build an exercise response with muscle relationships.
-    """
-    primary_muscles = []
-    secondary_muscles = []
+    """Build an exercise response with muscle relationships."""
+    created_at, updated_at = _resolve_response_timestamps(exercise)
+    primary_muscles: List[ExerciseMuscleResponse] = []
+    secondary_muscles: List[ExerciseMuscleResponse] = []
 
     for em in exercise.exercise_muscles:
         muscle_response = ExerciseMuscleResponse(
-            muscle_id=em.muscle.id,
+            muscle_id=str(em.muscle.id),
             muscle_name=em.muscle.name,
-            muscle_display_name=em.muscle.display_name_es,
-            muscle_category=em.muscle.muscle_category,
-            role=em.muscle_role
+            muscle_display_name=_safe_muscle_display_name(em.muscle),
+            muscle_category=em.muscle.muscle_category or "core",
+            role=em.muscle_role,
         )
         if em.muscle_role == "primary":
             primary_muscles.append(muscle_response)
@@ -50,11 +75,11 @@ def build_exercise_response(exercise: Exercise) -> dict:
             secondary_muscles.append(muscle_response)
 
     return {
-        "id": exercise.id,
+        "id": str(exercise.id),
         "name_en": exercise.name_en,
         "name_es": exercise.name_es,
-        "type": exercise.type,
-        "resistance_profile": exercise.resistance_profile,
+        "type": _enum_value(exercise.type),
+        "resistance_profile": _enum_value(exercise.resistance_profile),
         "category": exercise.category,
         "description_en": exercise.description_en,
         "description_es": exercise.description_es,
@@ -64,20 +89,54 @@ def build_exercise_response(exercise: Exercise) -> dict:
         "anatomy_image_url": exercise.anatomy_image_url,
         "equipment_needed": exercise.equipment_needed,
         "difficulty_level": exercise.difficulty_level,
-        # Clasificación de ejercicio
-        "exercise_class": exercise.exercise_class,
-        "cardio_subclass": exercise.cardio_subclass,
-        # Campos de cardio
+        "exercise_class": _enum_value(exercise.exercise_class),
+        "cardio_subclass": _enum_value(exercise.cardio_subclass),
         "intensity_zone": exercise.intensity_zone,
         "target_heart_rate_min": exercise.target_heart_rate_min,
         "target_heart_rate_max": exercise.target_heart_rate_max,
         "calories_per_minute": exercise.calories_per_minute,
-        # Músculos
         "primary_muscles": primary_muscles,
         "secondary_muscles": secondary_muscles,
-        "created_at": exercise.created_at,
-        "updated_at": exercise.updated_at,
+        "created_at": created_at,
+        "updated_at": updated_at,
     }
+
+
+def _require_existing_exercise(exercise_id: int, db: Session) -> Exercise:
+    exercise = (
+        db.query(Exercise)
+        .options(joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle))
+        .filter(Exercise.id == exercise_id)
+        .first()
+    )
+    if exercise is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ejercicio con id {exercise_id} no encontrado",
+        )
+    return exercise
+
+
+def _normalize_muscle_ids(primary_muscle_ids: list[str], secondary_muscle_ids: list[str]) -> tuple[list[int], list[int]]:
+    try:
+        primary = [int(mid) for mid in primary_muscle_ids]
+        secondary = [int(mid) for mid in secondary_muscle_ids]
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Muscle IDs must be numeric") from exc
+    return primary, secondary
+
+
+def _validate_muscles_exist(db: Session, muscle_ids: list[int]) -> None:
+    if not muscle_ids:
+        return
+    existing_muscles = db.query(Muscle).filter(Muscle.id.in_(muscle_ids)).all()
+    existing_ids = {m.id for m in existing_muscles}
+    missing = [str(mid) for mid in muscle_ids if mid not in existing_ids]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"MÃºsculos no encontrados: {', '.join(missing)}",
+        )
 
 
 @router.get("", response_model=ExerciseListResponse)
@@ -85,7 +144,7 @@ def list_exercises(
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    muscle_id: Optional[str] = Query(None, description="Filter by specific muscle ID"),
+    muscle_id: Optional[int] = Query(None, description="Filter by specific muscle ID"),
     muscle_category: Optional[str] = Query(None, description="Filter by muscle category (chest, back, shoulders, arms, legs, core)"),
     muscle_role: Optional[str] = Query(None, description="Filter by muscle role (primary, secondary)"),
     exercise_type: Optional[ExerciseType] = None,
@@ -93,29 +152,12 @@ def list_exercises(
     cardio_subclass: Optional[CardioSubclass] = Query(None, description="Filter by cardio subclass (liss, hiit, miss)"),
     resistance_profile: Optional[ResistanceProfile] = Query(None, description="Filter by resistance profile"),
     difficulty_level: Optional[str] = None,
-    search: Optional[str] = None
+    search: Optional[str] = None,
 ):
-    """
-    Get list of exercises with optional filters.
-
-    - **skip**: Number of records to skip (pagination)
-    - **limit**: Maximum number of records to return
-    - **muscle_id**: Filter by specific muscle ID
-    - **muscle_category**: Filter by muscle category (chest, back, shoulders, arms, legs, core)
-    - **muscle_role**: Filter by muscle role when muscle_id is specified (primary, secondary)
-    - **exercise_type**: Filter by exercise type (multiarticular/monoarticular)
-    - **exercise_class**: Filter by exercise class (strength, cardio, plyometric, flexibility, mobility, warmup, conditioning, balance)
-    - **cardio_subclass**: Filter by cardio subclass (liss, hiit, miss) - only applies when exercise_class is cardio
-    - **resistance_profile**: Filter by resistance profile (ascending, descending, flat, bell_shaped)
-    - **difficulty_level**: Filter by difficulty (beginner/intermediate/advanced)
-    - **search**: Search in exercise name and description
-    """
-    # Base query with eager loading of muscles
     query = db.query(Exercise).options(
         joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
     )
 
-    # Filter by muscle_id or muscle_category
     if muscle_id or muscle_category:
         query = query.join(ExerciseMuscle)
         if muscle_id:
@@ -128,18 +170,16 @@ def list_exercises(
                 query = query.filter(ExerciseMuscle.muscle_role == muscle_role)
 
     if exercise_type:
-        query = query.filter(Exercise.type == exercise_type)
+        query = query.filter(Exercise.type == exercise_type.value)
 
-    # Filtrar por clase de ejercicio
     if exercise_class:
-        query = query.filter(Exercise.exercise_class == exercise_class)
+        query = query.filter(Exercise.exercise_class == exercise_class.value)
 
-    # Filtrar por sub-clase de cardio
     if cardio_subclass:
-        query = query.filter(Exercise.cardio_subclass == cardio_subclass)
+        query = query.filter(Exercise.cardio_subclass == cardio_subclass.value)
 
     if resistance_profile:
-        query = query.filter(Exercise.resistance_profile == resistance_profile)
+        query = query.filter(Exercise.resistance_profile == resistance_profile.value)
 
     if difficulty_level:
         query = query.filter(Exercise.difficulty_level == difficulty_level)
@@ -147,269 +187,148 @@ def list_exercises(
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(
-            (Exercise.name_en.ilike(search_pattern)) |
-            (Exercise.name_es.ilike(search_pattern)) |
-            (Exercise.description_en.ilike(search_pattern)) |
-            (Exercise.description_es.ilike(search_pattern))
+            (Exercise.name_en.ilike(search_pattern))
+            | (Exercise.name_es.ilike(search_pattern))
+            | (Exercise.description_en.ilike(search_pattern))
+            | (Exercise.description_es.ilike(search_pattern))
         )
 
-    # Get total count (before pagination)
-    # Need to use distinct to avoid counting duplicates from joins
     total = query.distinct().count()
+    exercises = query.distinct().order_by(Exercise.id).offset(skip).limit(limit).all()
 
-    # Apply pagination
-    exercises = query.distinct().offset(skip).limit(limit).all()
-
-    # Build response with muscle relationships
-    exercise_responses = [build_exercise_response(ex) for ex in exercises]
-
-    return {
-        "total": total,
-        "exercises": exercise_responses
-    }
+    return {"total": total, "exercises": [build_exercise_response(ex) for ex in exercises]}
 
 
 @router.get("/{exercise_id}", response_model=ExerciseResponse)
-def get_exercise(exercise_id: str, db: Session = Depends(get_db)):
-    """Get a specific exercise by ID."""
-    exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == exercise_id).first()
-
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ejercicio con id {exercise_id} no encontrado"
-        )
-
-    return build_exercise_response(exercise)
+def get_exercise(exercise_id: int, db: Session = Depends(get_db)):
+    return build_exercise_response(_require_existing_exercise(exercise_id, db))
 
 
 @router.post("", response_model=ExerciseResponse, status_code=status.HTTP_201_CREATED)
 def create_exercise(
     exercise_data: ExerciseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_trainer)
+    current_user: User = Depends(require_trainer),
 ):
-    """
-    Create a new exercise with muscle relationships.
-    Requires trainer or admin role.
+    del current_user
 
-    - **primary_muscle_ids**: List of muscle IDs that are primary targets (at least one required)
-    - **secondary_muscle_ids**: List of muscle IDs that are secondary/synergist targets
-    """
-    from services.muscle_image import generate_muscle_image_sync
-
-    # Check if exercise with same name already exists
     existing_exercise = db.query(Exercise).filter(Exercise.name_en == exercise_data.name_en).first()
     if existing_exercise:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ya existe un ejercicio con el nombre '{exercise_data.name_en}'"
+            detail=f"Ya existe un ejercicio con el nombre '{exercise_data.name_en}'",
         )
 
-    # Validate muscle IDs exist
-    primary_muscle_ids = exercise_data.primary_muscle_ids
-    secondary_muscle_ids = exercise_data.secondary_muscle_ids or []
+    primary_ids, secondary_ids = _normalize_muscle_ids(
+        exercise_data.primary_muscle_ids,
+        exercise_data.secondary_muscle_ids or [],
+    )
+    _validate_muscles_exist(db, list(set(primary_ids + secondary_ids)))
 
-    all_muscle_ids = set(primary_muscle_ids + secondary_muscle_ids)
-    existing_muscles = db.query(Muscle).filter(Muscle.id.in_(all_muscle_ids)).all()
-    existing_muscle_ids = {m.id for m in existing_muscles}
-
-    missing_ids = all_muscle_ids - existing_muscle_ids
-    if missing_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Músculos no encontrados: {', '.join(missing_ids)}"
-        )
-
-    # Create new exercise (without muscle_group)
-    exercise_dict = exercise_data.model_dump(exclude={"primary_muscle_ids", "secondary_muscle_ids"})
+    exercise_dict = exercise_data.model_dump(mode="json", exclude={"primary_muscle_ids", "secondary_muscle_ids"})
+    now = _utcnow_naive()
+    exercise_dict["created_at"] = now
+    exercise_dict["updated_at"] = now
     new_exercise = Exercise(**exercise_dict)
     db.add(new_exercise)
-    db.flush()  # Get the ID
+    db.flush()
 
-    # Create muscle relationships
-    for muscle_id in primary_muscle_ids:
-        em = ExerciseMuscle(
-            exercise_id=new_exercise.id,
-            muscle_id=muscle_id,
-            muscle_role="primary"
-        )
-        db.add(em)
+    for muscle_id in primary_ids:
+        db.add(ExerciseMuscle(exercise_id=new_exercise.id, muscle_id=muscle_id, muscle_role="primary"))
 
-    for muscle_id in secondary_muscle_ids:
-        if muscle_id not in primary_muscle_ids:  # Avoid duplicates
-            em = ExerciseMuscle(
-                exercise_id=new_exercise.id,
-                muscle_id=muscle_id,
-                muscle_role="secondary"
-            )
-            db.add(em)
+    for muscle_id in secondary_ids:
+        if muscle_id not in primary_ids:
+            db.add(ExerciseMuscle(exercise_id=new_exercise.id, muscle_id=muscle_id, muscle_role="secondary"))
 
     db.commit()
 
-    # Reload with relationships
-    new_exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == new_exercise.id).first()
-
-    # Generate anatomical image using primary muscle
-    try:
-        if new_exercise.primary_muscles:
-            primary_muscle_name = new_exercise.primary_muscles[0].name
-            anatomy_image_url = generate_muscle_image_sync(
-                muscle_group=primary_muscle_name,
-                exercise_name=new_exercise.name_en,
-                use_multicolor=True
-            )
-            if anatomy_image_url:
-                new_exercise.anatomy_image_url = anatomy_image_url
-                db.commit()
-    except Exception as e:
-        print(f"Warning: Failed to generate anatomy image for {new_exercise.name_en}: {e}")
-
-    return build_exercise_response(new_exercise)
+    return build_exercise_response(_require_existing_exercise(new_exercise.id, db))
 
 
 @router.put("/{exercise_id}", response_model=ExerciseResponse)
 def update_exercise(
-    exercise_id: str,
+    exercise_id: int,
     exercise_data: ExerciseUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_trainer)
+    current_user: User = Depends(require_trainer),
 ):
-    """
-    Update an existing exercise.
-    Requires trainer or admin role.
-    """
-    exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == exercise_id).first()
+    del current_user
 
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ejercicio con id {exercise_id} no encontrado"
-        )
+    exercise = _require_existing_exercise(exercise_id, db)
 
-    # Check if updating name would create a duplicate
     if exercise_data.name_en and exercise_data.name_en != exercise.name_en:
         existing = db.query(Exercise).filter(Exercise.name_en == exercise_data.name_en).first()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Ya existe un ejercicio con el nombre '{exercise_data.name_en}'"
+                detail=f"Ya existe un ejercicio con el nombre '{exercise_data.name_en}'",
             )
 
-    # Update basic fields
-    update_data = exercise_data.model_dump(exclude_unset=True, exclude={"primary_muscle_ids", "secondary_muscle_ids"})
+    update_data = exercise_data.model_dump(
+        mode="json",
+        exclude_unset=True,
+        exclude={"primary_muscle_ids", "secondary_muscle_ids"},
+    )
     for field, value in update_data.items():
         setattr(exercise, field, value)
 
-    # Update muscle relationships if provided
     if exercise_data.primary_muscle_ids is not None:
-        primary_muscle_ids = exercise_data.primary_muscle_ids
-        secondary_muscle_ids = exercise_data.secondary_muscle_ids or []
+        primary_ids, secondary_ids = _normalize_muscle_ids(
+            exercise_data.primary_muscle_ids,
+            exercise_data.secondary_muscle_ids or [],
+        )
+        _validate_muscles_exist(db, list(set(primary_ids + secondary_ids)))
 
-        # Validate muscle IDs exist
-        all_muscle_ids = set(primary_muscle_ids + secondary_muscle_ids)
-        existing_muscles = db.query(Muscle).filter(Muscle.id.in_(all_muscle_ids)).all()
-        existing_muscle_ids = {m.id for m in existing_muscles}
-
-        missing_ids = all_muscle_ids - existing_muscle_ids
-        if missing_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Músculos no encontrados: {', '.join(missing_ids)}"
-            )
-
-        # Delete existing relationships
         db.query(ExerciseMuscle).filter(ExerciseMuscle.exercise_id == exercise_id).delete()
 
-        # Create new relationships
-        for muscle_id in primary_muscle_ids:
-            em = ExerciseMuscle(
-                exercise_id=exercise_id,
-                muscle_id=muscle_id,
-                muscle_role="primary"
-            )
-            db.add(em)
+        for muscle_id in primary_ids:
+            db.add(ExerciseMuscle(exercise_id=exercise_id, muscle_id=muscle_id, muscle_role="primary"))
+        for muscle_id in secondary_ids:
+            if muscle_id not in primary_ids:
+                db.add(ExerciseMuscle(exercise_id=exercise_id, muscle_id=muscle_id, muscle_role="secondary"))
 
-        for muscle_id in secondary_muscle_ids:
-            if muscle_id not in primary_muscle_ids:
-                em = ExerciseMuscle(
-                    exercise_id=exercise_id,
-                    muscle_id=muscle_id,
-                    muscle_role="secondary"
-                )
-                db.add(em)
-
+    exercise.updated_at = _utcnow_naive()
     db.commit()
 
-    # Reload with relationships
-    exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == exercise_id).first()
-
-    return build_exercise_response(exercise)
+    return build_exercise_response(_require_existing_exercise(exercise_id, db))
 
 
 @router.delete("/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_exercise(
-    exercise_id: str,
+    exercise_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_trainer)
+    current_user: User = Depends(require_trainer),
 ):
-    """
-    Delete an exercise.
-    Requires trainer or admin role.
-    """
+    del current_user
     exercise = db.query(Exercise).filter(Exercise.id == exercise_id).first()
-
     if not exercise:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ejercicio con id {exercise_id} no encontrado"
+            detail=f"Ejercicio con id {exercise_id} no encontrado",
         )
-
     db.delete(exercise)
     db.commit()
-
     return None
 
 
 @router.post("/{exercise_id}/upload-image", response_model=ExerciseResponse)
 async def upload_exercise_image(
-    exercise_id: str,
+    exercise_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_trainer)
+    current_user: User = Depends(require_trainer),
 ):
-    """
-    Upload a custom image for an exercise.
-    Requires trainer or admin role.
-    Supported formats: JPG, JPEG, PNG, GIF, WEBP
-    """
-    exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == exercise_id).first()
+    del current_user
 
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ejercicio con id {exercise_id} no encontrado"
-        )
+    exercise = _require_existing_exercise(exercise_id, db)
 
-    # Validate file extension
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Tipo de archivo no permitido. Tipos permitidos: {', '.join(ALLOWED_EXTENSIONS)}"
+            detail=f"Tipo de archivo no permitido. Tipos permitidos: {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
-    # Validate file size
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
@@ -417,165 +336,126 @@ async def upload_exercise_image(
     if file_size > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"El archivo ({file_size / 1024 / 1024:.2f}MB) excede el tamaño máximo ({MAX_FILE_SIZE_MB}MB)"
+            detail=f"El archivo ({file_size / 1024 / 1024:.2f}MB) excede el tamaÃ±o mÃ¡ximo ({MAX_FILE_SIZE_MB}MB)",
         )
 
     if file_size == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El archivo está vacío"
+            detail="El archivo estÃ¡ vacÃ­o",
         )
 
-    # Generate unique filename
-    unique_filename = f"{exercise_id}_{uuid.uuid4().hex[:8]}{file_ext}"
-    file_path = UPLOAD_DIR / unique_filename
+    old_image_url = exercise.image_url
 
-    # Delete old image if exists
-    if exercise.image_url:
-        old_filename = exercise.image_url.split("/")[-1]
-        old_file_path = UPLOAD_DIR / old_filename
-        if old_file_path.exists():
-            old_file_path.unlink()
-
-    # Save new file
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
+        new_image_url = upload_exercise_media(exercise_id=str(exercise_id), file=file)
+    except StorageError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al guardar el archivo: {str(e)}"
-        )
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error al subir la imagen del ejercicio: {str(exc)}",
+        ) from exc
 
-    # Update exercise with new image URL
-    exercise.image_url = f"/static/exercises/{unique_filename}"
+    exercise.image_url = new_image_url
     db.commit()
 
-    return build_exercise_response(exercise)
+    if old_image_url and old_image_url != new_image_url:
+        try:
+            delete_exercise_media(old_image_url)
+        except StorageError:
+            pass
+
+    return build_exercise_response(_require_existing_exercise(exercise_id, db))
 
 
 @router.delete("/{exercise_id}/image", response_model=ExerciseResponse)
 def delete_exercise_image(
-    exercise_id: str,
+    exercise_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_trainer)
+    current_user: User = Depends(require_trainer),
 ):
-    """
-    Delete the custom image of an exercise.
-    Requires trainer or admin role.
-    """
-    exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == exercise_id).first()
-
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ejercicio con id {exercise_id} no encontrado"
-        )
+    del current_user
+    exercise = _require_existing_exercise(exercise_id, db)
 
     if not exercise.image_url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El ejercicio no tiene una imagen personalizada"
+            detail="El ejercicio no tiene una imagen personalizada",
         )
 
-    # Delete file from disk
-    filename = exercise.image_url.split("/")[-1]
-    file_path = UPLOAD_DIR / filename
-    if file_path.exists():
-        file_path.unlink()
+    try:
+        delete_exercise_media(exercise.image_url)
+    except StorageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"No se pudo eliminar la imagen en storage: {str(exc)}",
+        ) from exc
 
-    # Clear image URL
     exercise.image_url = None
     db.commit()
 
-    return build_exercise_response(exercise)
+    return build_exercise_response(_require_existing_exercise(exercise_id, db))
 
 
 @router.post("/{exercise_id}/fetch-movement-image", response_model=ExerciseResponse)
 async def fetch_movement_image(
-    exercise_id: str,
+    exercise_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_trainer)
+    current_user: User = Depends(require_trainer),
 ):
-    """
-    Fetch a movement pattern image for an exercise from Wger.de.
-    Requires trainer or admin role.
-    """
+    del current_user
     from services.wger_image import fetch_movement_image as fetch_wger_image, get_mapped_name
 
-    exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == exercise_id).first()
+    exercise = _require_existing_exercise(exercise_id, db)
 
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ejercicio con id {exercise_id} no encontrado"
-        )
-
-    # Try to fetch from Wger with mapped name
     search_name = get_mapped_name(exercise.name_en)
     image_url = fetch_wger_image(search_name)
 
     if not image_url:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"No se encontró imagen de movimiento para '{exercise.name_en}' en Wger.de. Intenta subir una imagen personalizada."
+            detail=f"No se encontrÃ³ imagen de movimiento para '{exercise.name_en}' en Wger.de. Intenta subir una imagen personalizada.",
         )
 
-    # Update exercise with movement image URL
     exercise.thumbnail_url = image_url
     db.commit()
 
-    return build_exercise_response(exercise)
+    return build_exercise_response(_require_existing_exercise(exercise_id, db))
 
 
 @router.post("/{exercise_id}/generate-anatomy-image", response_model=ExerciseResponse)
 async def generate_anatomy_image(
-    exercise_id: str,
+    exercise_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_trainer)
+    current_user: User = Depends(require_trainer),
 ):
-    """
-    Generate an anatomical image for an exercise using the primary muscle.
-    Requires trainer or admin role.
-    """
+    del current_user
     from services.muscle_image import generate_muscle_image_sync
 
-    exercise = db.query(Exercise).options(
-        joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle)
-    ).filter(Exercise.id == exercise_id).first()
+    exercise = _require_existing_exercise(exercise_id, db)
 
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ejercicio con id {exercise_id} no encontrado"
-        )
-
-    if not exercise.primary_muscles:
+    primary_relation = next(
+        (em for em in exercise.exercise_muscles if em.muscle_role == "primary"),
+        None,
+    )
+    if not primary_relation or not primary_relation.muscle:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El ejercicio no tiene músculos primarios asignados"
+            detail="El ejercicio no tiene mÃºsculos primarios asignados",
         )
 
-    # Generate the anatomical image using primary muscle
-    primary_muscle_name = exercise.primary_muscles[0].name
     image_url = generate_muscle_image_sync(
-        muscle_group=primary_muscle_name,
+        muscle_group=primary_relation.muscle.name,
         exercise_name=exercise.name_en,
-        use_multicolor=True
+        use_multicolor=True,
     )
 
     if not image_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al generar la imagen anatómica. Por favor, intenta de nuevo."
+            detail="Error al generar la imagen anatÃ³mica. Por favor, intenta de nuevo.",
         )
 
-    # Update exercise with new anatomy image URL
     exercise.anatomy_image_url = image_url
     db.commit()
 
-    return build_exercise_response(exercise)
+    return build_exercise_response(_require_existing_exercise(exercise_id, db))
