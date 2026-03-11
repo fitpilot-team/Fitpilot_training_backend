@@ -32,6 +32,14 @@ Para stack compartido por multiples compose projects, crea la red externa:
 docker network create fitpilot-shared || true
 ```
 
+### Rollback rapido (produccion)
+
+Si falla conectividad Redis despues del deploy:
+
+1. Restaurar `REDIS_URL` previo en el `.env` del backend en VPS.
+2. Re-ejecutar deploy de `main` para `fitpilot-training-backend`.
+3. Verificar logs y mantener modo fail-open mientras se corrige red/ACL de Redis compartido.
+
 ### Validacion de esquema (dry-run)
 
 El servicio `training-schema-check` ejecuta:
