@@ -131,13 +131,20 @@ jobs:
 
             cd "$APP_DIR"
 
+            # Sync repo to make sure compose file exists
+            if [ -d .git ]; then
+              git fetch origin "${GITHUB_REF_NAME}"
+              git checkout "${GITHUB_REF_NAME}" || git checkout -B "${GITHUB_REF_NAME}"
+              git pull origin "${GITHUB_REF_NAME}"
+            fi
+
             # Ensure we have a compose file before running docker compose commands
             if [ -f docker-compose.yml ]; then
               COMPOSE_FILE="docker-compose.yml"
             elif [ -f compose.yml ]; then
               COMPOSE_FILE="compose.yml"
             else
-              echo "No se encontró docker compose file en $APP_DIR"
+              echo "No se encontró docker compose file en $APP_DIR despues de hacer git pull"
               ls -la
               exit 1
             fi
