@@ -8,6 +8,8 @@ import requests
 import threading
 import time
 from core.config import settings
+from core.redis_cache import get_json as redis_get_json
+from core.redis_cache import set_json as redis_set_json
 
 # Password hashing - using argon2 (more secure and no length limitations)
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -18,6 +20,7 @@ _auth_introspection_cache: dict[str, tuple[dict[str, Any], float]] = {}
 _auth_cache_lock = threading.Lock()
 _AUTH_CACHE_EXP_MARGIN_SECONDS = 5
 _AUTH_CACHE_MAX_ENTRIES = 4096
+_AUTH_REDIS_KEY_PREFIX = "training:auth:introspection:"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -78,6 +81,10 @@ def _token_cache_key(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _token_redis_cache_key(token: str) -> str:
+    return f"{_AUTH_REDIS_KEY_PREFIX}{_token_cache_key(token)}"
+
+
 def _extract_unverified_exp(token: str) -> Optional[float]:
     try:
         claims = jwt.get_unverified_claims(token)
@@ -130,22 +137,32 @@ def _prune_cache_locked(now_epoch: float) -> None:
 
 
 def _get_cached_introspection(token: str) -> Optional[dict[str, Any]]:
+    redis_key = _token_redis_cache_key(token)
+    redis_payload = redis_get_json(redis_key)
+    if redis_payload is not None:
+        redis_expires_at = _compute_cache_expires_at(token)
+        if redis_expires_at is not None:
+            with _auth_cache_lock:
+                _auth_introspection_cache[_token_cache_key(token)] = (redis_payload, redis_expires_at)
+        logger.debug("auth_cache_hit source=redis")
+        return redis_payload
+
     now_epoch = time.time()
     key = _token_cache_key(token)
 
     with _auth_cache_lock:
         entry = _auth_introspection_cache.get(key)
         if not entry:
-            logger.debug("auth_cache_miss reason=not_found")
+            logger.debug("auth_cache_miss source=memory reason=not_found")
             return None
 
         payload, expires_at = entry
         if expires_at <= now_epoch:
             _auth_introspection_cache.pop(key, None)
-            logger.debug("auth_cache_miss reason=expired")
+            logger.debug("auth_cache_miss source=memory reason=expired")
             return None
 
-        logger.debug("auth_cache_hit ttl_remaining_seconds=%.2f", expires_at - now_epoch)
+        logger.debug("auth_cache_hit source=memory ttl_remaining_seconds=%.2f", expires_at - now_epoch)
         return payload
 
 
@@ -162,7 +179,8 @@ def _set_cached_introspection(token: str, payload: dict[str, Any]) -> None:
         _prune_cache_locked(now_epoch)
         _auth_introspection_cache[key] = (payload, expires_at)
 
-    logger.debug("auth_cache_store ttl_seconds=%.2f", ttl_seconds)
+    redis_cached = redis_set_json(_token_redis_cache_key(token), payload, max(int(ttl_seconds), 1))
+    logger.debug("auth_cache_store ttl_seconds=%.2f redis_store=%s", ttl_seconds, redis_cached)
 
 
 def introspect_nutrition_token(token: str) -> Optional[dict[str, Any]]:
