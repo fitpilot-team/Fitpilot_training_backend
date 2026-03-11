@@ -121,7 +121,6 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          script_stop: true
           envs: GHCR_TOKEN,GHCR_OWNER,GHCR_USER,IMAGE_NAME,IMAGE_TAG,CONTAINER_NAME,PROJECT_NAME,REDIS_VOLUME,APP_DIR,ENV_FILE,DEPLOY_ENV
           script: |
             set -e
@@ -132,6 +131,17 @@ jobs:
 
             cd "$APP_DIR"
 
+            # Ensure we have a compose file before running docker compose commands
+            if [ -f docker-compose.yml ]; then
+              COMPOSE_FILE="docker-compose.yml"
+            elif [ -f compose.yml ]; then
+              COMPOSE_FILE="compose.yml"
+            else
+              echo "No se encontró docker compose file en $APP_DIR"
+              ls -la
+              exit 1
+            fi
+
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
             docker volume create "$REDIS_VOLUME" >/dev/null
@@ -140,9 +150,9 @@ jobs:
             export REDIS_VOLUME_NAME="$REDIS_VOLUME"
             export DEPLOY_ENV="$DEPLOY_ENV"
 
-            docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" pull backend
-            docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d redis
-            docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d backend
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" pull backend
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d redis
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d backend
 
             docker image prune -f
-            docker compose -p "$PROJECT_NAME" ps
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps
