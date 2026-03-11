@@ -133,6 +133,8 @@ jobs:
 
             # Sync repo to make sure compose file exists
             if [ -d .git ]; then
+              # Try to take ownership so git can write FETCH_HEAD
+              sudo chown -R "$USER":"$USER" "$APP_DIR" 2>/dev/null || chown -R "$USER":"$USER" "$APP_DIR"
               # Allow git operations when the directory is owned by root
               git config --global --add safe.directory "$APP_DIR"
               git fetch origin "${GITHUB_REF_NAME}"
