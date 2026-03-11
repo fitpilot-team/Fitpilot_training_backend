@@ -165,6 +165,7 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
             docker volume create "$REDIS_VOLUME" >/dev/null
+            docker network create fitpilot-shared >/dev/null 2>&1 || true
 
             export BACKEND_IMAGE="$IMAGE_NAME:$IMAGE_TAG"
             export REDIS_VOLUME_NAME="$REDIS_VOLUME"

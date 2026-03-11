@@ -13,6 +13,9 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
       - redis
+    networks:
+      - default
+      - fitpilot-shared
     restart: unless-stopped
     volumes:
       - ./static:/app/static
@@ -30,3 +33,8 @@ services:
 volumes:
   redis_data:
     name: ${REDIS_VOLUME_NAME:-fitpilot-redis-data}
+
+networks:
+  fitpilot-shared:
+    external: true
+    name: fitpilot-shared

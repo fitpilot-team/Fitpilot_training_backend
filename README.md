@@ -22,8 +22,15 @@ docker compose --env-file .env.fit-pilot10 -f docker-compose.yml up -d --build t
 En modo integracion local:
 - `NUTRITION_API_URL=http://nutrition-backend:3000`
 - `NUTRITION_AUTH_ME_PATH=/v1/auth/me`
+- `REDIS_URL=redis://app:<password-url-encoded>@fitpilot-redis:6379/0`
 
 El backend de training valida JWT emitidos por nutrition usando ese endpoint interno.
+
+Para stack compartido por multiples compose projects, crea la red externa:
+
+```bash
+docker network create fitpilot-shared || true
+```
 
 ### Validacion de esquema (dry-run)
 
