@@ -38,6 +38,7 @@ jobs:
 
           echo "ghcr_owner=$GHCR_OWNER" >> "$GITHUB_OUTPUT"
           echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "branch_name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           echo "image_name=ghcr.io/$GHCR_OWNER/fitpilot-training-backend" >> "$GITHUB_OUTPUT"
           echo "image_tag=$DEPLOY_ENV-latest" >> "$GITHUB_OUTPUT"
           echo "container_name=fitpilot-backend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
@@ -56,7 +57,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build & Push (backend image)
+      - name: Build & Push backend image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -81,7 +82,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
 
     steps:
-      - name: Set deploy metadata (again, for this job)
+      - name: Set deploy metadata
         id: meta
         run: |
           GHCR_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
@@ -94,6 +95,7 @@ jobs:
 
           echo "ghcr_owner=$GHCR_OWNER" >> "$GITHUB_OUTPUT"
           echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "branch_name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           echo "image_name=ghcr.io/$GHCR_OWNER/fitpilot-training-backend" >> "$GITHUB_OUTPUT"
           echo "image_tag=$DEPLOY_ENV-latest" >> "$GITHUB_OUTPUT"
           echo "container_name=fitpilot-backend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
@@ -116,39 +118,46 @@ jobs:
           APP_DIR: ${{ steps.meta.outputs.app_dir }}
           ENV_FILE: ${{ steps.meta.outputs.env_file }}
           DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
+          BRANCH_NAME: ${{ steps.meta.outputs.branch_name }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: GHCR_TOKEN,GHCR_OWNER,GHCR_USER,IMAGE_NAME,IMAGE_TAG,CONTAINER_NAME,PROJECT_NAME,REDIS_VOLUME,APP_DIR,ENV_FILE,DEPLOY_ENV
+          envs: GHCR_TOKEN,GHCR_OWNER,GHCR_USER,IMAGE_NAME,IMAGE_TAG,CONTAINER_NAME,PROJECT_NAME,REDIS_VOLUME,APP_DIR,ENV_FILE,DEPLOY_ENV,BRANCH_NAME
           script: |
             set -e
+
             if [ -z "$GHCR_TOKEN" ] || [ -z "$GHCR_USER" ]; then
-              echo "GHCR_TOKEN o GHCR_USER vacio. Revisa secrets del environment."
+              echo "GHCR_TOKEN o GHCR_USER vacío. Revisa secrets del environment."
+              exit 1
+            fi
+
+            if [ -z "$BRANCH_NAME" ]; then
+              echo "BRANCH_NAME vacío."
+              exit 1
+            fi
+
+            if [ -z "$APP_DIR" ]; then
+              echo "APP_DIR vacío."
               exit 1
             fi
 
             cd "$APP_DIR"
 
-            # Sync repo to make sure compose file exists
             if [ -d .git ]; then
-              # Try to take ownership so git can write FETCH_HEAD
-              sudo chown -R "$USER":"$USER" "$APP_DIR" 2>/dev/null || chown -R "$USER":"$USER" "$APP_DIR"
-              # Allow git operations when the directory is owned by root
               git config --global --add safe.directory "$APP_DIR"
-              git fetch origin "${GITHUB_REF_NAME}"
-              git checkout "${GITHUB_REF_NAME}" || git checkout -B "${GITHUB_REF_NAME}"
-              git pull origin "${GITHUB_REF_NAME}"
+              git fetch origin "$BRANCH_NAME"
+              git checkout "$BRANCH_NAME" || git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
+              git pull origin "$BRANCH_NAME"
             fi
 
-            # Ensure we have a compose file before running docker compose commands
             if [ -f docker-compose.yml ]; then
               COMPOSE_FILE="docker-compose.yml"
             elif [ -f compose.yml ]; then
               COMPOSE_FILE="compose.yml"
             else
-              echo "No se encontró docker compose file en $APP_DIR despues de hacer git pull"
+              echo "No se encontró docker compose file en $APP_DIR"
               ls -la
               exit 1
             fi
@@ -166,4 +175,4 @@ jobs:
             docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d backend
 
             docker image prune -f
-            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" ps
