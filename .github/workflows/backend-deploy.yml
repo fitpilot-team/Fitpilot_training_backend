@@ -1,0 +1,178 @@
+name: Backend Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  docker:
+    name: Build & Push Backend Image
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main' || github.ref_name == 'development'
+    permissions:
+      contents: read
+      packages: write
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set deploy metadata
+        id: meta
+        run: |
+          GHCR_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            DEPLOY_ENV="production"
+          else
+            DEPLOY_ENV="development"
+          fi
+
+          echo "ghcr_owner=$GHCR_OWNER" >> "$GITHUB_OUTPUT"
+          echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "branch_name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          echo "image_name=ghcr.io/$GHCR_OWNER/fitpilot-training-backend" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$DEPLOY_ENV-latest" >> "$GITHUB_OUTPUT"
+          echo "container_name=fitpilot-backend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "project_name=fitpilot-backend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "redis_volume=fitpilot-redis-data-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "app_dir=${{ vars.VPS_BACKEND_PATH || '/opt/Fitpilot_training_backend' }}" >> "$GITHUB_OUTPUT"
+          echo "env_file=${{ vars.VPS_BACKEND_ENV_FILE || '.env' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ steps.meta.outputs.ghcr_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.image_name }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: docker
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref_name == 'main' || github.ref_name == 'development')
+    permissions:
+      contents: read
+      packages: read
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      - name: Set deploy metadata
+        id: meta
+        run: |
+          GHCR_OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            DEPLOY_ENV="production"
+          else
+            DEPLOY_ENV="development"
+          fi
+
+          echo "ghcr_owner=$GHCR_OWNER" >> "$GITHUB_OUTPUT"
+          echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "branch_name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          echo "image_name=ghcr.io/$GHCR_OWNER/fitpilot-training-backend" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$DEPLOY_ENV-latest" >> "$GITHUB_OUTPUT"
+          echo "container_name=fitpilot-backend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "project_name=fitpilot-backend-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "redis_volume=fitpilot-redis-data-$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
+          echo "app_dir=${{ vars.VPS_BACKEND_PATH || '/opt/Fitpilot_training_backend' }}" >> "$GITHUB_OUTPUT"
+          echo "env_file=${{ vars.VPS_BACKEND_ENV_FILE || '.env' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_OWNER: ${{ steps.meta.outputs.ghcr_owner }}
+          GHCR_USER: ${{ steps.meta.outputs.ghcr_owner }}
+          IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          CONTAINER_NAME: ${{ steps.meta.outputs.container_name }}
+          PROJECT_NAME: ${{ steps.meta.outputs.project_name }}
+          REDIS_VOLUME: ${{ steps.meta.outputs.redis_volume }}
+          APP_DIR: ${{ steps.meta.outputs.app_dir }}
+          ENV_FILE: ${{ steps.meta.outputs.env_file }}
+          DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
+          BRANCH_NAME: ${{ steps.meta.outputs.branch_name }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: GHCR_TOKEN,GHCR_OWNER,GHCR_USER,IMAGE_NAME,IMAGE_TAG,CONTAINER_NAME,PROJECT_NAME,REDIS_VOLUME,APP_DIR,ENV_FILE,DEPLOY_ENV,BRANCH_NAME
+          script: |
+            set -e
+
+            if [ -z "$GHCR_TOKEN" ] || [ -z "$GHCR_USER" ]; then
+              echo "GHCR_TOKEN o GHCR_USER vacío. Revisa secrets del environment."
+              exit 1
+            fi
+
+            if [ -z "$BRANCH_NAME" ]; then
+              echo "BRANCH_NAME vacío."
+              exit 1
+            fi
+
+            if [ -z "$APP_DIR" ]; then
+              echo "APP_DIR vacío."
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+
+            if [ -d .git ]; then
+              git config --global --add safe.directory "$APP_DIR"
+              git fetch origin "$BRANCH_NAME"
+              git checkout "$BRANCH_NAME" || git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
+              git pull origin "$BRANCH_NAME"
+            fi
+
+            if [ -f docker-compose.yml ]; then
+              COMPOSE_FILE="docker-compose.yml"
+            elif [ -f compose.yml ]; then
+              COMPOSE_FILE="compose.yml"
+            else
+              echo "No se encontró docker compose file en $APP_DIR"
+              ls -la
+              exit 1
+            fi
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            docker volume create "$REDIS_VOLUME" >/dev/null
+
+            export BACKEND_IMAGE="$IMAGE_NAME:$IMAGE_TAG"
+            export REDIS_VOLUME_NAME="$REDIS_VOLUME"
+            export DEPLOY_ENV="$DEPLOY_ENV"
+
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" pull backend
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d redis
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d backend
+
+            docker image prune -f
+            docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" ps
