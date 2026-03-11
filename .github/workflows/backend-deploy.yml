@@ -133,6 +133,8 @@ jobs:
 
             # Sync repo to make sure compose file exists
             if [ -d .git ]; then
+              # Allow git operations when the directory is owned by root
+              git config --global --add safe.directory "$APP_DIR"
               git fetch origin "${GITHUB_REF_NAME}"
               git checkout "${GITHUB_REF_NAME}" || git checkout -B "${GITHUB_REF_NAME}"
               git pull origin "${GITHUB_REF_NAME}"
