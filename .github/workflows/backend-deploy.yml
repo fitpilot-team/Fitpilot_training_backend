@@ -167,6 +167,32 @@ jobs:
             docker volume create "$REDIS_VOLUME" >/dev/null
             docker network create fitpilot-shared >/dev/null 2>&1 || true
 
+            REDIS_SHARED_ENV="/opt/fitpilot-redis/.env"
+            TARGET_ENV_FILE="$ENV_FILE"
+            if [ ! -f "$TARGET_ENV_FILE" ] && [ -f "$APP_DIR/$ENV_FILE" ]; then
+              TARGET_ENV_FILE="$APP_DIR/$ENV_FILE"
+            fi
+
+            if [ -f "$REDIS_SHARED_ENV" ] && [ -f "$TARGET_ENV_FILE" ]; then
+              REDIS_USERNAME="$(grep '^REDIS_USERNAME=' "$REDIS_SHARED_ENV" | head -n1 | cut -d= -f2-)"
+              REDIS_PASSWORD="$(grep '^REDIS_PASSWORD=' "$REDIS_SHARED_ENV" | head -n1 | cut -d= -f2-)"
+
+              if [ -n "$REDIS_USERNAME" ] && [ -n "$REDIS_PASSWORD" ]; then
+                if command -v python3 >/dev/null 2>&1; then
+                  REDIS_PASSWORD_URL="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$REDIS_PASSWORD")"
+                else
+                  REDIS_PASSWORD_URL="$REDIS_PASSWORD"
+                fi
+
+                REDIS_URL_VALUE="redis://$REDIS_USERNAME:$REDIS_PASSWORD_URL@fitpilot-redis:6379/0"
+                if grep -q '^REDIS_URL=' "$TARGET_ENV_FILE"; then
+                  sed -i "s|^REDIS_URL=.*|REDIS_URL=$REDIS_URL_VALUE|g" "$TARGET_ENV_FILE"
+                else
+                  printf '\nREDIS_URL=%s\n' "$REDIS_URL_VALUE" >> "$TARGET_ENV_FILE"
+                fi
+              fi
+            fi
+
             export BACKEND_IMAGE="$IMAGE_NAME:$IMAGE_TAG"
             export REDIS_VOLUME_NAME="$REDIS_VOLUME"
             export DEPLOY_ENV="$DEPLOY_ENV"
