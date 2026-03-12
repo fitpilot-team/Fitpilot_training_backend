@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from models.base import Base
@@ -30,6 +30,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
     lastname = Column(String(200), nullable=True)
+    date_of_birth = Column(Date, nullable=True)
     email = Column(String(150), unique=True, index=True, nullable=True)
     password = Column(String(255), nullable=True)
     role = Column(

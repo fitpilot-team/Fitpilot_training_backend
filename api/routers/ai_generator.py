@@ -28,6 +28,7 @@ from schemas.ai_generator import (
     CreationMode,
 )
 from schemas.client_interview import InterviewValidationResponse
+from core.date_utils import calculate_age_from_date_of_birth
 from core.dependencies import (
     assert_training_professional_access,
     get_current_user,
@@ -233,6 +234,41 @@ def _attach_patient_context(request: AIWorkoutRequest, db: Session) -> None:
         request.context_version = context.context_version
 
 
+def _enforce_client_age_from_db(request: AIWorkoutRequest, db: Session) -> None:
+    if request.creation_mode != CreationMode.CLIENT:
+        return
+
+    if not request.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Se requiere client_id para creation_mode=client",
+        )
+
+    try:
+        parsed_client_id = int(request.client_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="client_id debe ser numerico",
+        ) from exc
+
+    client = db.query(User).filter(
+        User.id == parsed_client_id,
+        User.role == UserRole.CLIENT,
+    ).first()
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cliente no encontrado",
+        )
+
+    request.user_profile.age = calculate_age_from_date_of_birth(
+        client.date_of_birth,
+        min_age=14,
+        max_age=100,
+    )
+
+
 def _ensure_trainer_or_admin(current_user: User) -> None:
     assert_training_professional_access(current_user)
 
@@ -270,8 +306,6 @@ def get_questionnaire_config(
                 {"name": "fitness_level", "type": "select", "required": True,
                  "label": "Nivel de fitness",
                  "options": ["beginner", "intermediate", "advanced"]},
-                {"name": "age", "type": "number", "required": False,
-                 "label": "Edad", "min": 14, "max": 100},
                 {"name": "gender", "type": "select", "required": False,
                  "label": "GÃ©nero",
                  "options": ["male", "female", "other"]},
@@ -487,7 +521,10 @@ def get_interview_as_ai_request(
         ) from exc
 
     # Verificar cliente
-    client = db.query(User).filter(User.id == parsed_client_id).first()
+    client = db.query(User).filter(
+        User.id == parsed_client_id,
+        User.role == UserRole.CLIENT,
+    ).first()
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -515,6 +552,11 @@ def get_interview_as_ai_request(
 
     # Mapear a secciones de AI request
     sections = InterviewToAIRequestMapper.map_interview_to_ai_sections(interview)
+    sections["user_profile"].age = calculate_age_from_date_of_birth(
+        client.date_of_birth,
+        min_age=14,
+        max_age=100,
+    )
 
     return {
         "client_id": str(parsed_client_id),
@@ -542,6 +584,7 @@ async def test_generate_workout(
 
     # Limitar a un solo microciclo
     single_cycle_warning = _enforce_single_microcycle(request)
+    _enforce_client_age_from_db(request, db)
 
     # Obtener ejercicios reales de la DB para usar IDs vÃ¡lidos
     exercises = db.query(Exercise).limit(50).all()
@@ -798,6 +841,7 @@ async def generate_workout(
 
     # Limitar a un solo microciclo para ahorrar tokens
     single_cycle_warning = _enforce_single_microcycle(request)
+    _enforce_client_age_from_db(request, db)
 
     phase = "load_exercises"
     try:
@@ -884,6 +928,7 @@ async def preview_workout(
 
     # Limitar a un solo microciclo
     single_cycle_warning = _enforce_single_microcycle(request)
+    _enforce_client_age_from_db(request, db)
 
     phase = "load_exercises"
     try:

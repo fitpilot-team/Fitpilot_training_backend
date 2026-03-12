@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from core.date_utils import calculate_age_from_date_of_birth
 from core.dependencies import assert_training_professional_access, get_current_user
 from models.base import get_db
 from models.client_interview import ClientInterview
@@ -249,7 +250,7 @@ def create_client_interview(
 
     _ensure_role(current_user)
     parsed_client_id = _parse_client_id(client_id)
-    _ensure_client_exists(db, parsed_client_id)
+    client = _ensure_client_exists(db, parsed_client_id)
 
     existing = db.query(ClientInterview).filter(ClientInterview.client_id == parsed_client_id).first()
     if existing:
@@ -259,6 +260,11 @@ def create_client_interview(
         )
 
     payload = _normalize_payload(interview_data.model_dump(exclude_unset=True, mode="json"))
+    payload["age"] = calculate_age_from_date_of_birth(
+        client.date_of_birth,
+        min_age=14,
+        max_age=100,
+    )
 
     now = datetime.utcnow()
     interview = ClientInterview(
@@ -286,9 +292,14 @@ def update_client_interview(
 
     _ensure_role(current_user)
     parsed_client_id = _parse_client_id(client_id)
-    _ensure_client_exists(db, parsed_client_id)
+    client = _ensure_client_exists(db, parsed_client_id)
 
     payload = _normalize_payload(interview_data.model_dump(exclude_unset=True, mode="json"))
+    payload["age"] = calculate_age_from_date_of_birth(
+        client.date_of_birth,
+        min_age=14,
+        max_age=100,
+    )
     now = datetime.utcnow()
 
     interview = db.query(ClientInterview).filter(ClientInterview.client_id == parsed_client_id).first()

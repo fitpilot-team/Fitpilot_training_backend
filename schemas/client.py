@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 
 
 class ClientCreate(BaseModel):
@@ -18,6 +18,7 @@ class ClientResponse(BaseModel):
     id: str
     email: str
     full_name: str
+    date_of_birth: date | None = None
     is_active: bool
     is_verified: bool
     created_at: datetime
