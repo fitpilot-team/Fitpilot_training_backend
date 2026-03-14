@@ -208,11 +208,10 @@ jobs:
             exit 1
           fi
 
-          docker exec "$CONTAINER_NAME" python -c "import os,sys; sys.exit(0 if os.getenv('REDIS_URL') == 'redis://redis:6379/0' else 1)"
-          docker exec "$CONTAINER_NAME" python -c "import socket; socket.gethostbyname('redis')"
-
           for attempt in $(seq 1 15); do
-            if docker exec "$CONTAINER_NAME" python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10)"; then
+            if docker exec "$CONTAINER_NAME" python -c "import os,sys; sys.exit(0 if os.getenv('REDIS_URL') == 'redis://redis:6379/0' else 1)" \
+              && docker exec "$CONTAINER_NAME" python -c "import socket; socket.gethostbyname('redis')" \
+              && docker exec "$CONTAINER_NAME" python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10)"; then
               break
             fi
             if [ "$attempt" -eq 15 ]; then
