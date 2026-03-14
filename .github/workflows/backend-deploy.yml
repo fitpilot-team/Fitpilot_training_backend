@@ -125,15 +125,16 @@ jobs:
           PORT="${{ secrets.VPS_PORT }}"
           if [ -z "$PORT" ]; then PORT=22; fi
 
-          TMP_COMPOSE="/tmp/fitpilot-training-docker-compose.release.yml"
+          TMP_COMPOSE_BASENAME=".fitpilot-training-docker-compose.release.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.yml"
 
           sshpass -p "$VPS_PASSWORD" scp -P "$PORT" -o StrictHostKeyChecking=yes \
             docker-compose.release.yml \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:"$TMP_COMPOSE"
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:"~/$TMP_COMPOSE_BASENAME"
 
           sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
           set -euo pipefail
+          TMP_COMPOSE="\$HOME/$TMP_COMPOSE_BASENAME"
           if ! mkdir -p "$APP_DIR" 2>/dev/null; then
             echo "$VPS_PASSWORD" | sudo -S mkdir -p "$APP_DIR"
           fi
@@ -143,6 +144,7 @@ jobs:
             echo "$VPS_PASSWORD" | sudo -S mv "$TMP_COMPOSE" "$APP_DIR/$REMOTE_COMPOSE_FILE"
             echo "release compose synced to $APP_DIR/$REMOTE_COMPOSE_FILE (with sudo)"
           fi
+          rm -f "$TMP_COMPOSE" 2>/dev/null || true
           EOF
 
       - name: Deploy on VPS
