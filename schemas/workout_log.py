@@ -1,7 +1,13 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, date
 from typing import Optional, List, Literal
 from models.workout_log import WorkoutStatus, AbandonReason
+
+
+def _stringify_id(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
 
 
 # =============== ExerciseSetLog Schemas ===============
@@ -23,7 +29,11 @@ class ExerciseSetLogResponse(ExerciseSetLogBase):
     id: str
     workout_log_id: str
     completed_at: datetime
-    created_at: datetime
+
+    @field_validator("id", "workout_log_id", "day_exercise_id", mode="before")
+    @classmethod
+    def serialize_ids(cls, value: object) -> str | None:
+        return _stringify_id(value)
 
     class Config:
         from_attributes = True
@@ -68,8 +78,11 @@ class WorkoutLogResponse(WorkoutLogBase):
     abandon_notes: Optional[str] = None
     rescheduled_to_date: Optional[date] = None
     exercise_sets: List[ExerciseSetLogResponse] = []
-    created_at: datetime
-    updated_at: datetime
+
+    @field_validator("id", "client_id", "training_day_id", mode="before")
+    @classmethod
+    def serialize_ids(cls, value: object) -> str | None:
+        return _stringify_id(value)
 
     class Config:
         from_attributes = True
@@ -137,6 +150,11 @@ class NextWorkoutTrainingDay(BaseModel):
     focus: Optional[str] = None
     day_number: int
     rest_day: bool = False
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def serialize_id(cls, value: object) -> str | None:
+        return _stringify_id(value)
 
     class Config:
         from_attributes = True

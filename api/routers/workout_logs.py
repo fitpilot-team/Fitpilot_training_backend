@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Optional
 from models.base import get_db
 from models.user import User, UserRole
@@ -29,15 +29,30 @@ from core.dependencies import get_current_user
 router = APIRouter()
 
 
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def parse_int_id(raw_id: str | int, field_name: str) -> int:
+    try:
+        return int(str(raw_id))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must be a valid integer id",
+        )
+
+
 def get_day_name_es(day_number: int) -> str:
     """Get Spanish day name from day number (1=Monday)"""
     days = ["Lun", "Mar", "Mier", "Jue", "Vie", "Sab", "Dom"]
     return days[(day_number - 1) % 7]
 
 
-def verify_training_day_access(db: Session, training_day_id: str, current_user: User) -> TrainingDay:
+def verify_training_day_access(db: Session, training_day_id: str | int, current_user: User) -> TrainingDay:
     """Verify user has access to the training day"""
-    training_day = db.query(TrainingDay).filter(TrainingDay.id == training_day_id).first()
+    parsed_training_day_id = parse_int_id(training_day_id, "training_day_id")
+    training_day = db.query(TrainingDay).filter(TrainingDay.id == parsed_training_day_id).first()
 
     if not training_day:
         raise HTTPException(
@@ -121,7 +136,7 @@ def get_next_workout(
         if td.id not in completed_ids:
             return NextWorkoutResponse(
                 training_day=NextWorkoutTrainingDay(
-                    id=td.id,
+                    id=str(td.id),
                     name=td.name,
                     focus=td.focus,
                     day_number=td.day_number,
@@ -152,11 +167,12 @@ def start_workout(
     """
     # Verify access to training day
     training_day = verify_training_day_access(db, workout_data.training_day_id, current_user)
+    training_day_id = training_day.id
 
     # Check if there's already an in_progress workout for this training day
     existing = db.query(WorkoutLog).filter(
         WorkoutLog.client_id == current_user.id,
-        WorkoutLog.training_day_id == workout_data.training_day_id,
+        WorkoutLog.training_day_id == training_day_id,
         WorkoutLog.status == WorkoutStatus.IN_PROGRESS.value
     ).first()
 
@@ -167,7 +183,8 @@ def start_workout(
     # Create new workout log
     workout_log = WorkoutLog(
         client_id=current_user.id,
-        training_day_id=workout_data.training_day_id,
+        training_day_id=training_day_id,
+        started_at=utc_now(),
         notes=workout_data.notes,
         status=WorkoutStatus.IN_PROGRESS
     )
@@ -180,7 +197,7 @@ def start_workout(
 
 @router.get("/{workout_log_id}", response_model=WorkoutLogResponse)
 def get_workout_log(
-    workout_log_id: str,
+    workout_log_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -205,7 +222,7 @@ def get_workout_log(
 
 @router.get("/{workout_log_id}/state", response_model=CurrentWorkoutState)
 def get_workout_state(
-    workout_log_id: str,
+    workout_log_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -258,7 +275,7 @@ def get_workout_state(
         exercise_name = day_exercise.exercise.name_es or day_exercise.exercise.name_en if day_exercise.exercise else "Unknown"
 
         exercises_progress.append(ExerciseProgress(
-            day_exercise_id=day_exercise.id,
+            day_exercise_id=str(day_exercise.id),
             exercise_name=exercise_name,
             total_sets=day_exercise.sets,
             completed_sets=len(completed_sets),
@@ -278,7 +295,7 @@ def get_workout_state(
 
 @router.patch("/{workout_log_id}", response_model=WorkoutLogResponse)
 def update_workout_log(
-    workout_log_id: str,
+    workout_log_id: int,
     workout_data: WorkoutLogUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -306,7 +323,7 @@ def update_workout_log(
 
     # If completing the workout, set completed_at
     if update_data.get("status") == WorkoutStatus.COMPLETED.value and not workout_log.completed_at:
-        update_data["completed_at"] = datetime.utcnow()
+        update_data["completed_at"] = utc_now()
 
     for field, value in update_data.items():
         setattr(workout_log, field, value)
@@ -319,7 +336,7 @@ def update_workout_log(
 
 @router.post("/{workout_log_id}/sets", response_model=ExerciseSetLogResponse, status_code=status.HTTP_201_CREATED)
 def log_exercise_set(
-    workout_log_id: str,
+    workout_log_id: int,
     set_data: ExerciseSetLogCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -350,8 +367,9 @@ def log_exercise_set(
         )
 
     # Verify day_exercise belongs to this training day
+    day_exercise_id = parse_int_id(set_data.day_exercise_id, "day_exercise_id")
     day_exercise = db.query(DayExercise).filter(
-        DayExercise.id == set_data.day_exercise_id,
+        DayExercise.id == day_exercise_id,
         DayExercise.training_day_id == workout_log.training_day_id
     ).first()
 
@@ -364,11 +382,12 @@ def log_exercise_set(
     # Create set log
     set_log = ExerciseSetLog(
         workout_log_id=workout_log_id,
-        day_exercise_id=set_data.day_exercise_id,
+        day_exercise_id=day_exercise_id,
         set_number=set_data.set_number,
         reps_completed=set_data.reps_completed,
         weight_kg=set_data.weight_kg,
         effort_value=set_data.effort_value,
+        completed_at=utc_now(),
         notes=set_data.notes
     )
     db.add(set_log)
@@ -380,7 +399,7 @@ def log_exercise_set(
 
 @router.get("/client/{client_id}", response_model=WorkoutLogListResponse)
 def get_client_workout_history(
-    client_id: str,
+    client_id: int,
     skip: int = 0,
     limit: int = 20,
     db: Session = Depends(get_db),
@@ -473,7 +492,7 @@ def get_weekly_progress(
             ).first()
 
             if training_day:
-                day_progress.training_day_id = training_day.id
+                day_progress.training_day_id = str(training_day.id)
                 day_progress.training_day_name = training_day.name
                 day_progress.is_rest_day = training_day.rest_day
 
@@ -649,7 +668,7 @@ def get_missed_workouts(
             days_overdue = (today - td.date).days
 
             missed_workouts.append(MissedWorkoutResponse(
-                training_day_id=td.id,
+                training_day_id=str(td.id),
                 training_day_name=td.name,
                 scheduled_date=td.date,
                 days_overdue=days_overdue,
