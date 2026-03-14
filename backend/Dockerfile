@@ -23,4 +23,4 @@ RUN mkdir -p /app/static/exercises /app/static/profiles /app/static/videos && \
 EXPOSE 8000
 
 # Run the application
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["sh", "-c", "if [ \"$DEPLOY_ENV\" = \"production\" ]; then exec uvicorn api.main:app --host 0.0.0.0 --port 8000; else exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload; fi"]
