@@ -146,8 +146,8 @@ jobs:
           EOF
 
       - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.2.2
         env:
-          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ steps.meta.outputs.ghcr_owner }}
           BACKEND_IMAGE: ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}
@@ -158,76 +158,76 @@ jobs:
           ENV_FILE: ${{ steps.meta.outputs.env_file }}
           DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
           REMOTE_COMPOSE_FILE: ${{ steps.meta.outputs.remote_compose_file }}
-        run: |
-          PORT="${{ secrets.VPS_PORT }}"
-          if [ -z "$PORT" ]; then PORT=22; fi
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: GHCR_TOKEN,GHCR_USER,BACKEND_IMAGE,CONTAINER_NAME,PROJECT_NAME,REDIS_VOLUME,APP_DIR,ENV_FILE,DEPLOY_ENV,REMOTE_COMPOSE_FILE
+          script: |
+            set -euo pipefail
+            cd "$APP_DIR"
 
-          sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
-          set -euo pipefail
-          cd "$APP_DIR"
+            [ -n "$GHCR_TOKEN" ] || (echo "GHCR_TOKEN is empty" && exit 1)
+            [ -n "$GHCR_USER" ] || (echo "GHCR_USER is empty" && exit 1)
+            [ -n "$BACKEND_IMAGE" ] || (echo "BACKEND_IMAGE is empty" && exit 1)
+            [ -n "$CONTAINER_NAME" ] || (echo "CONTAINER_NAME is empty" && exit 1)
+            [ -n "$PROJECT_NAME" ] || (echo "PROJECT_NAME is empty" && exit 1)
+            [ -n "$REDIS_VOLUME" ] || (echo "REDIS_VOLUME is empty" && exit 1)
+            [ -n "$DEPLOY_ENV" ] || (echo "DEPLOY_ENV is empty" && exit 1)
+            [ -f "$REMOTE_COMPOSE_FILE" ] || (echo "Missing compose file: $REMOTE_COMPOSE_FILE" && exit 1)
 
-          [ -n "$GHCR_TOKEN" ] || (echo "GHCR_TOKEN is empty" && exit 1)
-          [ -n "$GHCR_USER" ] || (echo "GHCR_USER is empty" && exit 1)
-          [ -n "$BACKEND_IMAGE" ] || (echo "BACKEND_IMAGE is empty" && exit 1)
-          [ -n "$CONTAINER_NAME" ] || (echo "CONTAINER_NAME is empty" && exit 1)
-          [ -n "$PROJECT_NAME" ] || (echo "PROJECT_NAME is empty" && exit 1)
-          [ -n "$REDIS_VOLUME" ] || (echo "REDIS_VOLUME is empty" && exit 1)
-          [ -n "$DEPLOY_ENV" ] || (echo "DEPLOY_ENV is empty" && exit 1)
-          [ -f "$REMOTE_COMPOSE_FILE" ] || (echo "Missing compose file: $REMOTE_COMPOSE_FILE" && exit 1)
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker network create fitpilot-shared >/dev/null 2>&1 || true
+            docker volume create "$REDIS_VOLUME" >/dev/null
 
-          docker network create fitpilot-shared >/dev/null 2>&1 || true
-          docker volume create "$REDIS_VOLUME" >/dev/null
+            BACKEND_IMAGE="$BACKEND_IMAGE" \
+            APP_ENV_FILE="$ENV_FILE" \
+            CONTAINER_NAME="$CONTAINER_NAME" \
+            DEPLOY_ENV="$DEPLOY_ENV" \
+            REDIS_VOLUME_NAME="$REDIS_VOLUME" \
+            docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" pull backend
 
-          BACKEND_IMAGE="$BACKEND_IMAGE" \
-          APP_ENV_FILE="$ENV_FILE" \
-          CONTAINER_NAME="$CONTAINER_NAME" \
-          DEPLOY_ENV="$DEPLOY_ENV" \
-          REDIS_VOLUME_NAME="$REDIS_VOLUME" \
-          docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" pull backend
+            BACKEND_IMAGE="$BACKEND_IMAGE" \
+            APP_ENV_FILE="$ENV_FILE" \
+            CONTAINER_NAME="$CONTAINER_NAME" \
+            DEPLOY_ENV="$DEPLOY_ENV" \
+            REDIS_VOLUME_NAME="$REDIS_VOLUME" \
+            docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d redis
 
-          BACKEND_IMAGE="$BACKEND_IMAGE" \
-          APP_ENV_FILE="$ENV_FILE" \
-          CONTAINER_NAME="$CONTAINER_NAME" \
-          DEPLOY_ENV="$DEPLOY_ENV" \
-          REDIS_VOLUME_NAME="$REDIS_VOLUME" \
-          docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d redis
+            BACKEND_IMAGE="$BACKEND_IMAGE" \
+            APP_ENV_FILE="$ENV_FILE" \
+            CONTAINER_NAME="$CONTAINER_NAME" \
+            DEPLOY_ENV="$DEPLOY_ENV" \
+            REDIS_VOLUME_NAME="$REDIS_VOLUME" \
+            docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d --force-recreate backend
 
-          BACKEND_IMAGE="$BACKEND_IMAGE" \
-          APP_ENV_FILE="$ENV_FILE" \
-          CONTAINER_NAME="$CONTAINER_NAME" \
-          DEPLOY_ENV="$DEPLOY_ENV" \
-          REDIS_VOLUME_NAME="$REDIS_VOLUME" \
-          docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" up -d --force-recreate backend
-
-          ACTUAL_IMAGE="$(docker inspect "$CONTAINER_NAME" --format '{{.Config.Image}}')"
-          if [ "$ACTUAL_IMAGE" != "$BACKEND_IMAGE" ]; then
-            echo "Unexpected backend image: $ACTUAL_IMAGE"
-            exit 1
-          fi
-
-          for attempt in $(seq 1 30); do
-            if [ "$attempt" -eq 30 ]; then
-              docker logs --tail 100 "$CONTAINER_NAME" || true
-              echo "Training backend did not become healthy in time"
+            ACTUAL_IMAGE="$(docker inspect "$CONTAINER_NAME" --format '{{.Config.Image}}')"
+            if [ "$ACTUAL_IMAGE" != "$BACKEND_IMAGE" ]; then
+              echo "Unexpected backend image: $ACTUAL_IMAGE"
               exit 1
             fi
-            if [ "$(docker inspect "$CONTAINER_NAME" --format '{{.State.Running}}')" = "true" ] && curl -fsS "http://127.0.0.1:8000/health" >/dev/null; then
-              break
-            fi
-            sleep 3
-          done
 
-          docker image prune -f
+            for attempt in $(seq 1 30); do
+              if [ "$attempt" -eq 30 ]; then
+                docker logs --tail 100 "$CONTAINER_NAME" || true
+                echo "Training backend did not become healthy in time"
+                exit 1
+              fi
+              if [ "$(docker inspect "$CONTAINER_NAME" --format '{{.State.Running}}')" = "true" ] && curl -fsS "http://127.0.0.1:8000/health" >/dev/null; then
+                break
+              fi
+              sleep 3
+            done
 
-          BACKEND_IMAGE="$BACKEND_IMAGE" \
-          APP_ENV_FILE="$ENV_FILE" \
-          CONTAINER_NAME="$CONTAINER_NAME" \
-          DEPLOY_ENV="$DEPLOY_ENV" \
-          REDIS_VOLUME_NAME="$REDIS_VOLUME" \
-          docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" ps
+            docker image prune -f
 
-          docker logout ghcr.io || true
-          EOF
+            BACKEND_IMAGE="$BACKEND_IMAGE" \
+            APP_ENV_FILE="$ENV_FILE" \
+            CONTAINER_NAME="$CONTAINER_NAME" \
+            DEPLOY_ENV="$DEPLOY_ENV" \
+            REDIS_VOLUME_NAME="$REDIS_VOLUME" \
+            docker compose -f "$REMOTE_COMPOSE_FILE" -p "$PROJECT_NAME" --env-file "$ENV_FILE" ps
+
+            docker logout ghcr.io || true
