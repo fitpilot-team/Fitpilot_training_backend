@@ -1,12 +1,16 @@
-from pydantic import BaseModel, Field
-from datetime import datetime, date
-from typing import Optional, List, Literal
-from models.workout_log import WorkoutStatus, AbandonReason
+from datetime import date, datetime
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from models.workout_log import AbandonReason, WorkoutStatus
 
 
-# =============== ExerciseSetLog Schemas ===============
+# ExerciseSetLog schemas
 
 class ExerciseSetLogBase(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     day_exercise_id: str
     set_number: int = Field(ge=1, le=20, description="Set number (1, 2, 3...)")
     reps_completed: int = Field(ge=0, le=100, description="Reps completed in this set")
@@ -20,18 +24,18 @@ class ExerciseSetLogCreate(ExerciseSetLogBase):
 
 
 class ExerciseSetLogResponse(ExerciseSetLogBase):
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     workout_log_id: str
-    completed_at: datetime
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    completed_at: Optional[datetime] = None
 
 
-# =============== WorkoutLog Schemas ===============
+# WorkoutLog schemas
 
 class WorkoutLogBase(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     training_day_id: str
     notes: Optional[str] = None
 
@@ -44,35 +48,31 @@ class WorkoutLogUpdate(BaseModel):
     status: Optional[WorkoutStatus] = None
     notes: Optional[str] = None
     completed_at: Optional[datetime] = None
-    # Campos para abandono
     abandon_reason: Optional[AbandonReason] = None
     abandon_notes: Optional[str] = None
     rescheduled_to_date: Optional[date] = None
 
 
 class WorkoutAbandonData(BaseModel):
-    """Datos específicos para abandonar un entrenamiento"""
+    """Datos especificos para abandonar un entrenamiento."""
+
     reason: AbandonReason
     notes: Optional[str] = None
     reschedule_to: Optional[date] = None
 
 
 class WorkoutLogResponse(WorkoutLogBase):
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     client_id: str
-    started_at: datetime
+    started_at: Optional[datetime] = None
     completed_at: Optional[datetime]
     status: WorkoutStatus
-    # Campos de abandono
     abandon_reason: Optional[AbandonReason] = None
     abandon_notes: Optional[str] = None
     rescheduled_to_date: Optional[date] = None
     exercise_sets: List[ExerciseSetLogResponse] = []
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class WorkoutLogListResponse(BaseModel):
@@ -80,24 +80,28 @@ class WorkoutLogListResponse(BaseModel):
     workout_logs: List[WorkoutLogResponse]
 
 
-# =============== Progress Schemas (para Dashboard) ===============
+# Progress schemas
 
 class DayProgress(BaseModel):
-    """Progreso de un día específico"""
+    """Progreso de un dia especifico."""
+
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     date: date
-    day_number: int  # 1-7 (Lun-Dom)
-    day_name: str  # "Lun", "Mar", etc.
+    day_number: int
+    day_name: str
     training_day_id: Optional[str] = None
     training_day_name: Optional[str] = None
     total_sets: int = 0
     completed_sets: int = 0
-    completion_percentage: float = 0.0  # 0-100
-    has_workout: bool = False  # Si tiene entrenamiento programado
+    completion_percentage: float = 0.0
+    has_workout: bool = False
     is_rest_day: bool = False
 
 
 class WeeklyProgressResponse(BaseModel):
-    """Progreso semanal para el dashboard"""
+    """Progreso semanal para el dashboard."""
+
     week_start: date
     week_end: date
     days: List[DayProgress]
@@ -106,10 +110,13 @@ class WeeklyProgressResponse(BaseModel):
     overall_completion_percentage: float
 
 
-# =============== Current Workout State ===============
+# Current workout state
 
 class ExerciseProgress(BaseModel):
-    """Estado de progreso de un ejercicio durante el workout"""
+    """Estado de progreso de un ejercicio durante el workout."""
+
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     day_exercise_id: str
     exercise_name: str
     total_sets: int
@@ -119,7 +126,10 @@ class ExerciseProgress(BaseModel):
 
 
 class CurrentWorkoutState(BaseModel):
-    """Estado actual de un workout en progreso"""
+    """Estado actual de un workout en progreso."""
+
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     workout_log: WorkoutLogResponse
     training_day_name: str
     training_day_focus: Optional[str]
@@ -128,45 +138,51 @@ class CurrentWorkoutState(BaseModel):
     exercises_progress: List[ExerciseProgress]
 
 
-# =============== Next Workout (Sistema Secuencial) ===============
+# Next workout
 
 class NextWorkoutTrainingDay(BaseModel):
-    """Training day simplificado para NextWorkoutResponse"""
+    """Training day simplificado para NextWorkoutResponse."""
+
+    model_config = ConfigDict(from_attributes=True, coerce_numbers_to_str=True)
+
     id: str
     name: str
     focus: Optional[str] = None
     day_number: int
     rest_day: bool = False
 
-    class Config:
-        from_attributes = True
-
 
 class NextWorkoutResponse(BaseModel):
     """
-    Respuesta para obtener el próximo entrenamiento pendiente.
+    Respuesta para obtener el proximo entrenamiento pendiente.
     Usa sistema secuencial: devuelve el primer TrainingDay sin WorkoutLog completado.
     """
+
     training_day: Optional[NextWorkoutTrainingDay] = None
-    position: Optional[int] = None  # Posición actual (ej: 5 de 24)
-    total: Optional[int] = None  # Total de entrenamientos en el programa
-    all_completed: bool = False  # True si el cliente completó todo el programa
+    position: Optional[int] = None
+    total: Optional[int] = None
+    all_completed: bool = False
+    reason: Optional[Literal["no_active_macrocycle", "no_training_days", "all_completed"]] = None
 
 
-# =============== Missed Workouts (Entrenamientos Perdidos) ===============
+# Missed workouts
 
 class MissedWorkoutResponse(BaseModel):
-    """Representa un entrenamiento que no se completó"""
+    """Representa un entrenamiento que no se completo."""
+
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     training_day_id: str
     training_day_name: str
     scheduled_date: date
-    days_overdue: int  # Días desde que debió completarse
+    days_overdue: int
     status: Literal["never_started", "abandoned"]
     abandon_reason: Optional[AbandonReason] = None
-    can_reschedule: bool = True  # True si el programa sigue activo
+    can_reschedule: bool = True
 
 
 class MissedWorkoutsListResponse(BaseModel):
-    """Lista de entrenamientos perdidos"""
+    """Lista de entrenamientos perdidos."""
+
     total: int
     missed_workouts: List[MissedWorkoutResponse]

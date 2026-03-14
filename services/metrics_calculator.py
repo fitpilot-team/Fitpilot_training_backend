@@ -3,7 +3,7 @@ Metrics calculator service for training volume calculations.
 Centralizes the logic for calculating muscle volume, effective sets, etc.
 """
 from typing import List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # Labels en español para los grupos musculares
@@ -38,6 +38,8 @@ class MuscleVolumeItem(BaseModel):
 
 class MuscleVolumeResponse(BaseModel):
     """Schema for muscle volume endpoint response."""
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
     training_day_id: str
     training_day_name: str
     total_effective_sets: float
@@ -129,7 +131,7 @@ def calculate_muscle_volume(training_day, count_secondary: bool = True) -> Muscl
     muscles.sort(key=lambda x: x.effective_sets, reverse=True)
 
     return MuscleVolumeResponse(
-        training_day_id=training_day.id,
+        training_day_id=str(training_day.id),
         training_day_name=training_day.name or f"Día {training_day.day_number}",
         total_effective_sets=round(sum(m.effective_sets for m in muscles), 1),
         muscles=muscles

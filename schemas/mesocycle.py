@@ -291,3 +291,11 @@ class MacrocycleResponse(MacrocycleBase):
 class MacrocycleListResponse(BaseModel):
     total: int
     macrocycles: List[MacrocycleResponse]
+
+
+class MacrocycleActivationResponse(BaseModel):
+    macrocycle: MacrocycleResponse
+    effective_start_date: date
+    shifted_training_day_count: int
+    archived_macrocycle_ids: List[str] = []
+    completed_macrocycle_ids: List[str] = []

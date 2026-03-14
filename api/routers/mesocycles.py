@@ -1,13 +1,16 @@
+from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from models.base import get_db
 from models.user import User
 from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay, DayExercise, MesocycleStatus
+from models.workout_log import WorkoutLog, WorkoutStatus
 from models.exercise import Exercise
 from models.exercise_muscle import ExerciseMuscle
 from schemas.mesocycle import (
     MacrocycleCreate, MacrocycleUpdate, MacrocycleResponse, MacrocycleListResponse,
+    MacrocycleActivationResponse,
     MesocycleCreate, MesocycleUpdate, MesocycleResponse, MesocycleListResponse,
     MicrocycleCreate, MicrocycleUpdate, MicrocycleResponse,
     TrainingDayCreate, TrainingDayUpdate, TrainingDayResponse,
@@ -21,6 +24,100 @@ from core.dependencies import (
 )
 
 router = APIRouter()
+
+
+def _macrocycle_detail_query(db: Session):
+    return db.query(Macrocycle).options(
+        joinedload(Macrocycle.mesocycles)
+            .joinedload(Mesocycle.microcycles)
+            .joinedload(Microcycle.training_days)
+            .joinedload(TrainingDay.exercises)
+            .joinedload(DayExercise.exercise)
+            .joinedload(Exercise.exercise_muscles)
+            .joinedload(ExerciseMuscle.muscle)
+    )
+
+
+def _get_ordered_training_day_records(macrocycle: Macrocycle) -> list[tuple[Mesocycle, Microcycle, TrainingDay]]:
+    ordered_records: list[tuple[Mesocycle, Microcycle, TrainingDay]] = []
+
+    for mesocycle in sorted(macrocycle.mesocycles, key=lambda item: (item.block_number, item.id)):
+        for microcycle in sorted(mesocycle.microcycles, key=lambda item: (item.week_number, item.id)):
+            for training_day in sorted(
+                microcycle.training_days,
+                key=lambda item: (item.day_number, item.id),
+            ):
+                ordered_records.append((mesocycle, microcycle, training_day))
+
+    return ordered_records
+
+
+def _sync_macrocycle_ranges(macrocycle: Macrocycle) -> None:
+    macrocycle_dates: list[date] = []
+
+    for mesocycle in macrocycle.mesocycles:
+        mesocycle_dates: list[date] = []
+
+        for microcycle in mesocycle.microcycles:
+            microcycle_dates = sorted(
+                day.date for day in microcycle.training_days if day.date is not None
+            )
+            if microcycle_dates:
+                microcycle.start_date = microcycle_dates[0]
+                microcycle.end_date = microcycle_dates[-1]
+                mesocycle_dates.extend(microcycle_dates)
+
+        if mesocycle_dates:
+            mesocycle_dates.sort()
+            mesocycle.start_date = mesocycle_dates[0]
+            mesocycle.end_date = mesocycle_dates[-1]
+            macrocycle_dates.extend(mesocycle_dates)
+
+    if macrocycle_dates:
+        macrocycle_dates.sort()
+        macrocycle.start_date = macrocycle_dates[0]
+        macrocycle.end_date = macrocycle_dates[-1]
+
+
+def _shift_macrocycle_schedule(macrocycle: Macrocycle, effective_start_date: date) -> int:
+    ordered_records = _get_ordered_training_day_records(macrocycle)
+
+    for offset, (_, _, training_day) in enumerate(ordered_records):
+        training_day.date = effective_start_date + timedelta(days=offset)
+
+    _sync_macrocycle_ranges(macrocycle)
+    return len(ordered_records)
+
+
+def _resolve_replaced_macrocycle_status(db: Session, macrocycle: Macrocycle) -> MesocycleStatus:
+    total_training_days = db.query(TrainingDay).join(
+        Microcycle, TrainingDay.microcycle_id == Microcycle.id
+    ).join(
+        Mesocycle, Microcycle.mesocycle_id == Mesocycle.id
+    ).filter(
+        Mesocycle.macrocycle_id == macrocycle.id,
+        TrainingDay.rest_day == False
+    ).count()
+
+    if total_training_days == 0 or macrocycle.client_id is None:
+        return MesocycleStatus.ARCHIVED
+
+    completed_training_days = db.query(WorkoutLog.training_day_id).join(
+        TrainingDay, TrainingDay.id == WorkoutLog.training_day_id
+    ).join(
+        Microcycle, TrainingDay.microcycle_id == Microcycle.id
+    ).join(
+        Mesocycle, Microcycle.mesocycle_id == Mesocycle.id
+    ).filter(
+        WorkoutLog.client_id == macrocycle.client_id,
+        WorkoutLog.status == WorkoutStatus.COMPLETED.value,
+        Mesocycle.macrocycle_id == macrocycle.id,
+    ).distinct().count()
+
+    if completed_training_days >= total_training_days:
+        return MesocycleStatus.COMPLETED
+
+    return MesocycleStatus.ARCHIVED
 
 
 # =============== Macrocycle Endpoints ===============
@@ -85,15 +182,7 @@ def get_macrocycle(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific macrocycle by ID with all nested data"""
-    macrocycle = db.query(Macrocycle).options(
-        joinedload(Macrocycle.mesocycles)
-            .joinedload(Mesocycle.microcycles)
-            .joinedload(Microcycle.training_days)
-            .joinedload(TrainingDay.exercises)
-            .joinedload(DayExercise.exercise)
-            .joinedload(Exercise.exercise_muscles)
-            .joinedload(ExerciseMuscle.muscle)
-    ).filter(Macrocycle.id == macrocycle_id).first()
+    macrocycle = _macrocycle_detail_query(db).filter(Macrocycle.id == macrocycle_id).first()
 
     if not macrocycle:
         raise HTTPException(
@@ -181,6 +270,75 @@ def update_macrocycle(
     db.refresh(macrocycle)
 
     return macrocycle
+
+
+@router.post("/{macrocycle_id}/activate", response_model=MacrocycleActivationResponse)
+def activate_macrocycle(
+    macrocycle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Activate a client program and realign its schedule to the effective start date."""
+    macrocycle = _macrocycle_detail_query(db).filter(Macrocycle.id == macrocycle_id).first()
+
+    if not macrocycle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Macrocycle with id {macrocycle_id} not found"
+        )
+
+    _check_trainer_access(macrocycle, current_user)
+
+    if macrocycle.client_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only programs assigned to a client can be activated"
+        )
+
+    if not _get_ordered_training_day_records(macrocycle):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot activate a program without training days"
+        )
+
+    effective_start_date = max(macrocycle.start_date, date.today())
+    archived_macrocycle_ids: list[str] = []
+    completed_macrocycle_ids: list[str] = []
+
+    other_active_macrocycles = db.query(Macrocycle).filter(
+        Macrocycle.client_id == macrocycle.client_id,
+        Macrocycle.id != macrocycle.id,
+        Macrocycle.status == MesocycleStatus.ACTIVE,
+    ).all()
+
+    for active_macrocycle in other_active_macrocycles:
+        replacement_status = _resolve_replaced_macrocycle_status(db, active_macrocycle)
+        active_macrocycle.status = replacement_status
+
+        if replacement_status == MesocycleStatus.COMPLETED:
+            completed_macrocycle_ids.append(str(active_macrocycle.id))
+        else:
+            archived_macrocycle_ids.append(str(active_macrocycle.id))
+
+    macrocycle.status = MesocycleStatus.ACTIVE
+    shifted_training_day_count = _shift_macrocycle_schedule(macrocycle, effective_start_date)
+
+    db.commit()
+
+    refreshed_macrocycle = _macrocycle_detail_query(db).filter(Macrocycle.id == macrocycle_id).first()
+    if refreshed_macrocycle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Macrocycle with id {macrocycle_id} not found after activation"
+        )
+
+    return MacrocycleActivationResponse(
+        macrocycle=refreshed_macrocycle,
+        effective_start_date=effective_start_date,
+        shifted_training_day_count=shifted_training_day_count,
+        archived_macrocycle_ids=archived_macrocycle_ids,
+        completed_macrocycle_ids=completed_macrocycle_ids,
+    )
 
 
 @router.delete("/{macrocycle_id}", status_code=status.HTTP_204_NO_CONTENT)

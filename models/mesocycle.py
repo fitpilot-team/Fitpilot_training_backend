@@ -17,6 +17,28 @@ from sqlalchemy.orm import relationship
 from models.base import Base
 
 
+def _enum_values(enum_type: type[enum.Enum]) -> list[str]:
+    return [member.value for member in enum_type]
+
+
+def _string_enum(enum_type: type[enum.Enum], *, name: str | None = None) -> Enum:
+    return Enum(
+        enum_type,
+        name=name,
+        values_callable=_enum_values,
+        native_enum=False,
+    )
+
+
+def _training_native_enum(enum_type: type[enum.Enum], *, name: str) -> Enum:
+    return Enum(
+        enum_type,
+        name=name,
+        schema="training",
+        values_callable=_enum_values,
+    )
+
+
 class MesocycleStatus(str, enum.Enum):
     DRAFT = "draft"
     ACTIVE = "active"
@@ -72,11 +94,7 @@ class Macrocycle(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     status = Column(
-        Enum(
-            MesocycleStatus,
-            values_callable=lambda enum_type: [e.value for e in enum_type],
-            native_enum=False,
-        ),
+        _string_enum(MesocycleStatus),
         default=MesocycleStatus.DRAFT,
         nullable=False,
     )
@@ -127,11 +145,7 @@ class Microcycle(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     intensity_level = Column(
-        Enum(
-            IntensityLevel,
-            values_callable=lambda enum_type: [e.value for e in enum_type],
-            native_enum=False,
-        ),
+        _training_native_enum(IntensityLevel, name="intensity_level"),
         default=IntensityLevel.MEDIUM,
         nullable=False,
     )
@@ -177,11 +191,7 @@ class DayExercise(Base):
     exercise_id = Column(Integer, ForeignKey("training.exercises.id"), nullable=False)
     order_index = Column(Integer, nullable=False)
     phase = Column(
-        Enum(
-            ExercisePhase,
-            values_callable=lambda enum_type: [e.value for e in enum_type],
-            native_enum=False,
-        ),
+        _training_native_enum(ExercisePhase, name="exercise_phase"),
         default=ExercisePhase.MAIN,
         nullable=False,
     )
@@ -191,11 +201,7 @@ class DayExercise(Base):
     reps_max = Column(Integer, nullable=True)
     rest_seconds = Column(Integer, nullable=False)
     effort_type = Column(
-        Enum(
-            EffortType,
-            values_callable=lambda enum_type: [e.value for e in enum_type],
-            native_enum=False,
-        ),
+        _string_enum(EffortType),
         nullable=False,
     )
     effort_value = Column(Float, nullable=False)

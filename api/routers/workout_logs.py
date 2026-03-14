@@ -1,10 +1,11 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta, date
-from typing import Optional
+from typing import Optional, Sequence
 from models.base import get_db
-from models.user import User, UserRole
+from models.user import User
 from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay, DayExercise
 from models.workout_log import WorkoutLog, ExerciseSetLog, WorkoutStatus
 from models.mesocycle import MesocycleStatus
@@ -24,9 +25,15 @@ from schemas.workout_log import (
     MissedWorkoutResponse,
     MissedWorkoutsListResponse
 )
-from core.dependencies import get_current_user
+from core.dependencies import (
+    get_current_user,
+    get_effective_user_role,
+    get_training_day_or_404,
+    parse_numeric_identifier,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def get_day_name_es(day_number: int) -> str:
@@ -35,15 +42,51 @@ def get_day_name_es(day_number: int) -> str:
     return days[(day_number - 1) % 7]
 
 
-def verify_training_day_access(db: Session, training_day_id: str, current_user: User) -> TrainingDay:
-    """Verify user has access to the training day"""
-    training_day = db.query(TrainingDay).filter(TrainingDay.id == training_day_id).first()
-
-    if not training_day:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Training day with id {training_day_id} not found"
+def build_next_workout_response(
+    training_days: Sequence[TrainingDay],
+    completed_ids: set[str],
+) -> NextWorkoutResponse:
+    if not training_days:
+        return NextWorkoutResponse(
+            training_day=None,
+            position=None,
+            total=None,
+            all_completed=False,
+            reason="no_training_days",
         )
+
+    total_training_days = len(training_days)
+
+    for index, training_day in enumerate(training_days):
+        if str(training_day.id) in completed_ids:
+            continue
+
+        return NextWorkoutResponse(
+            training_day=NextWorkoutTrainingDay(
+                id=str(training_day.id),
+                name=training_day.name,
+                focus=training_day.focus,
+                day_number=training_day.day_number,
+                rest_day=training_day.rest_day,
+            ),
+            position=index + 1,
+            total=total_training_days,
+            all_completed=False,
+            reason=None,
+        )
+
+    return NextWorkoutResponse(
+        training_day=None,
+        position=total_training_days,
+        total=total_training_days,
+        all_completed=True,
+        reason="all_completed",
+    )
+
+
+def verify_training_day_access(db: Session, training_day_id: int | str, current_user: User) -> TrainingDay:
+    """Verify user has access to the training day"""
+    training_day = get_training_day_or_404(db, training_day_id)
 
     # Navigate up the hierarchy to get macrocycle
     microcycle = db.query(Microcycle).filter(Microcycle.id == training_day.microcycle_id).first()
@@ -51,18 +94,30 @@ def verify_training_day_access(db: Session, training_day_id: str, current_user: 
     macrocycle = db.query(Macrocycle).filter(Macrocycle.id == mesocycle.macrocycle_id).first()
 
     # Check permissions
-    if current_user.role == UserRole.CLIENT and macrocycle.client_id != current_user.id:
+    effective_role = get_effective_user_role(current_user)
+
+    if effective_role == "client" and macrocycle.client_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this training day"
         )
-    elif current_user.role == UserRole.TRAINER and macrocycle.trainer_id != current_user.id:
+    elif effective_role == "trainer" and macrocycle.trainer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this training day"
         )
 
     return training_day
+
+
+def get_workout_log_or_404(db: Session, workout_log_id: int) -> WorkoutLog:
+    workout_log = db.query(WorkoutLog).filter(WorkoutLog.id == workout_log_id).first()
+    if not workout_log:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workout log with id {workout_log_id} not found",
+        )
+    return workout_log
 
 
 @router.get("/next", response_model=NextWorkoutResponse)
@@ -75,7 +130,9 @@ def get_next_workout(
     Usa sistema secuencial: devuelve el primer TrainingDay sin WorkoutLog completado.
     El orden es: mesocycle.block_number → microcycle.week_number → training_day.day_number
     """
-    if current_user.role != UserRole.CLIENT:
+    effective_role = get_effective_user_role(current_user)
+
+    if effective_role != "client":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This endpoint is only for clients"
@@ -88,7 +145,18 @@ def get_next_workout(
     ).first()
 
     if not macrocycle:
-        return NextWorkoutResponse(training_day=None, position=None, total=None)
+        logger.info(
+            "next_workout_unavailable reason=no_active_macrocycle user_id=%s email=%s",
+            current_user.id,
+            current_user.email,
+        )
+        return NextWorkoutResponse(
+            training_day=None,
+            position=None,
+            total=None,
+            all_completed=False,
+            reason="no_active_macrocycle",
+        )
 
     # 2. Obtener todos los training_days ordenados (excluyendo días de descanso)
     training_days = db.query(TrainingDay).join(
@@ -101,43 +169,44 @@ def get_next_workout(
     ).order_by(
         Mesocycle.block_number,
         Microcycle.week_number,
-        TrainingDay.day_number
+        TrainingDay.day_number,
+        TrainingDay.id,
     ).all()
-
-    if not training_days:
-        return NextWorkoutResponse(training_day=None, position=None, total=None)
 
     # 3. Obtener IDs de training_days que tienen WorkoutLog completado
     # Usamos .value porque el enum de PostgreSQL usa valores en minúsculas
     completed_ids = set(
-        row[0] for row in db.query(WorkoutLog.training_day_id).filter(
+        str(row[0]) for row in db.query(WorkoutLog.training_day_id).filter(
             WorkoutLog.client_id == current_user.id,
             WorkoutLog.status == WorkoutStatus.COMPLETED.value
         ).all()
     )
 
-    # 4. Encontrar el primer training_day no completado
-    for index, td in enumerate(training_days):
-        if td.id not in completed_ids:
-            return NextWorkoutResponse(
-                training_day=NextWorkoutTrainingDay(
-                    id=td.id,
-                    name=td.name,
-                    focus=td.focus,
-                    day_number=td.day_number,
-                    rest_day=td.rest_day
-                ),
-                position=index + 1,  # 1-based para mostrar "Día 5 de 24"
-                total=len(training_days)
-            )
+    response = build_next_workout_response(training_days, completed_ids)
 
-    # 5. Todos los entrenamientos están completados
-    return NextWorkoutResponse(
-        training_day=None,
-        position=len(training_days),
-        total=len(training_days),
-        all_completed=True
-    )
+    if response.training_day is None:
+        logger.info(
+            "next_workout_unavailable reason=%s user_id=%s email=%s macrocycle_id=%s total_training_days=%s completed_training_days=%s",
+            response.reason,
+            current_user.id,
+            current_user.email,
+            macrocycle.id,
+            len(training_days),
+            len(completed_ids),
+        )
+    else:
+        logger.debug(
+            "next_workout_resolved user_id=%s email=%s macrocycle_id=%s training_day_id=%s position=%s total=%s",
+            current_user.id,
+            current_user.email,
+            macrocycle.id,
+            response.training_day.id,
+            response.position,
+            response.total,
+        )
+
+    return response
+
 
 
 @router.post("", response_model=WorkoutLogResponse, status_code=status.HTTP_201_CREATED)
@@ -152,11 +221,12 @@ def start_workout(
     """
     # Verify access to training day
     training_day = verify_training_day_access(db, workout_data.training_day_id, current_user)
+    training_day_id = training_day.id
 
     # Check if there's already an in_progress workout for this training day
     existing = db.query(WorkoutLog).filter(
         WorkoutLog.client_id == current_user.id,
-        WorkoutLog.training_day_id == workout_data.training_day_id,
+        WorkoutLog.training_day_id == training_day_id,
         WorkoutLog.status == WorkoutStatus.IN_PROGRESS.value
     ).first()
 
@@ -167,7 +237,8 @@ def start_workout(
     # Create new workout log
     workout_log = WorkoutLog(
         client_id=current_user.id,
-        training_day_id=workout_data.training_day_id,
+        training_day_id=training_day_id,
+        started_at=datetime.utcnow(),
         notes=workout_data.notes,
         status=WorkoutStatus.IN_PROGRESS
     )
@@ -180,21 +251,15 @@ def start_workout(
 
 @router.get("/{workout_log_id}", response_model=WorkoutLogResponse)
 def get_workout_log(
-    workout_log_id: str,
+    workout_log_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific workout log by ID"""
-    workout_log = db.query(WorkoutLog).filter(WorkoutLog.id == workout_log_id).first()
-
-    if not workout_log:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workout log with id {workout_log_id} not found"
-        )
+    workout_log = get_workout_log_or_404(db, workout_log_id)
 
     # Verify access
-    if current_user.role == UserRole.CLIENT and workout_log.client_id != current_user.id:
+    if get_effective_user_role(current_user) == "client" and workout_log.client_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this workout log"
@@ -205,7 +270,7 @@ def get_workout_log(
 
 @router.get("/{workout_log_id}/state", response_model=CurrentWorkoutState)
 def get_workout_state(
-    workout_log_id: str,
+    workout_log_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -213,16 +278,10 @@ def get_workout_state(
     Get the current state of a workout in progress.
     Returns exercise progress with completed sets.
     """
-    workout_log = db.query(WorkoutLog).filter(WorkoutLog.id == workout_log_id).first()
-
-    if not workout_log:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workout log with id {workout_log_id} not found"
-        )
+    workout_log = get_workout_log_or_404(db, workout_log_id)
 
     # Verify access
-    if current_user.role == UserRole.CLIENT and workout_log.client_id != current_user.id:
+    if get_effective_user_role(current_user) == "client" and workout_log.client_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this workout log"
@@ -278,7 +337,7 @@ def get_workout_state(
 
 @router.patch("/{workout_log_id}", response_model=WorkoutLogResponse)
 def update_workout_log(
-    workout_log_id: str,
+    workout_log_id: int,
     workout_data: WorkoutLogUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -286,13 +345,7 @@ def update_workout_log(
     """
     Update a workout log (e.g., mark as completed or abandoned).
     """
-    workout_log = db.query(WorkoutLog).filter(WorkoutLog.id == workout_log_id).first()
-
-    if not workout_log:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workout log with id {workout_log_id} not found"
-        )
+    workout_log = get_workout_log_or_404(db, workout_log_id)
 
     # Verify ownership
     if workout_log.client_id != current_user.id:
@@ -319,7 +372,7 @@ def update_workout_log(
 
 @router.post("/{workout_log_id}/sets", response_model=ExerciseSetLogResponse, status_code=status.HTTP_201_CREATED)
 def log_exercise_set(
-    workout_log_id: str,
+    workout_log_id: int,
     set_data: ExerciseSetLogCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -327,13 +380,9 @@ def log_exercise_set(
     """
     Log a completed set for an exercise.
     """
-    workout_log = db.query(WorkoutLog).filter(WorkoutLog.id == workout_log_id).first()
+    workout_log = get_workout_log_or_404(db, workout_log_id)
 
-    if not workout_log:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workout log with id {workout_log_id} not found"
-        )
+    day_exercise_id = parse_numeric_identifier(set_data.day_exercise_id, "day_exercise_id")
 
     # Verify ownership
     if workout_log.client_id != current_user.id:
@@ -351,7 +400,7 @@ def log_exercise_set(
 
     # Verify day_exercise belongs to this training day
     day_exercise = db.query(DayExercise).filter(
-        DayExercise.id == set_data.day_exercise_id,
+        DayExercise.id == day_exercise_id,
         DayExercise.training_day_id == workout_log.training_day_id
     ).first()
 
@@ -364,12 +413,13 @@ def log_exercise_set(
     # Create set log
     set_log = ExerciseSetLog(
         workout_log_id=workout_log_id,
-        day_exercise_id=set_data.day_exercise_id,
+        day_exercise_id=day_exercise_id,
+        exercise_id=day_exercise.exercise_id,
         set_number=set_data.set_number,
         reps_completed=set_data.reps_completed,
         weight_kg=set_data.weight_kg,
         effort_value=set_data.effort_value,
-        notes=set_data.notes
+        completed_at=datetime.utcnow(),
     )
     db.add(set_log)
     db.commit()
@@ -380,7 +430,7 @@ def log_exercise_set(
 
 @router.get("/client/{client_id}", response_model=WorkoutLogListResponse)
 def get_client_workout_history(
-    client_id: str,
+    client_id: int,
     skip: int = 0,
     limit: int = 20,
     db: Session = Depends(get_db),
@@ -392,7 +442,7 @@ def get_client_workout_history(
     Trainers can see history of their clients.
     """
     # Verify access
-    if current_user.role == UserRole.CLIENT and client_id != current_user.id:
+    if get_effective_user_role(current_user) == "client" and client_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this client's history"
@@ -421,7 +471,7 @@ def get_weekly_progress(
     Get weekly progress for the current user (client).
     Returns completion percentage for each day of the week.
     """
-    if current_user.role != UserRole.CLIENT:
+    if get_effective_user_role(current_user) != "client":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This endpoint is only for clients"
@@ -473,7 +523,7 @@ def get_weekly_progress(
             ).first()
 
             if training_day:
-                day_progress.training_day_id = training_day.id
+                day_progress.training_day_id = str(training_day.id)
                 day_progress.training_day_name = training_day.name
                 day_progress.is_rest_day = training_day.rest_day
 
@@ -531,7 +581,7 @@ def get_todays_workout(
     """
     Get in-progress workout for today if exists.
     """
-    if current_user.role != UserRole.CLIENT:
+    if get_effective_user_role(current_user) != "client":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This endpoint is only for clients"
@@ -586,7 +636,7 @@ def get_missed_workouts(
     Args:
         days_back: Número de días hacia atrás para buscar (default: 14)
     """
-    if current_user.role != UserRole.CLIENT:
+    if get_effective_user_role(current_user) != "client":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This endpoint is only for clients"

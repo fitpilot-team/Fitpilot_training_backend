@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
@@ -12,6 +13,7 @@ from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay
 from models.user import ProfessionalRole, User
 
 security = HTTPBearer()
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -42,8 +44,9 @@ def _extract_identity(payload: dict | None) -> tuple[str | None, str | None, str
     return user_id, email, normalize_auth_role(role)
 
 
-def _resolve_user(db: Session, user_id: str | None, email: str | None) -> User | None:
+def _resolve_user(db: Session, user_id: str | None, email: str | None) -> tuple[User | None, str | None]:
     user = None
+    resolution_source = None
 
     if user_id:
         try:
@@ -52,11 +55,15 @@ def _resolve_user(db: Session, user_id: str | None, email: str | None) -> User |
             parsed_id = None
         if parsed_id is not None:
             user = db.query(User).filter(User.id == parsed_id).first()
+            if user is not None:
+                resolution_source = "id"
 
     if user is None and email:
         user = db.query(User).filter(User.email.ilike(str(email))).first()
+        if user is not None:
+            resolution_source = "email"
 
-    return user
+    return user, resolution_source
 
 
 def _extract_auth_payload(user: User) -> dict[str, Any]:
@@ -75,6 +82,25 @@ def _parse_plan_id(value: Any) -> int | None:
         return None
 
     return parsed if parsed > 0 else None
+
+
+def parse_numeric_identifier(raw_value: Any, field_name: str) -> int:
+    """Normalize API string identifiers to positive database integers."""
+    try:
+        parsed = int(str(raw_value).strip())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must be a numeric identifier",
+        ) from exc
+
+    if parsed <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must be greater than zero",
+        )
+
+    return parsed
 
 
 def _extract_professional_roles(user: User) -> set[str]:
@@ -297,12 +323,13 @@ def get_microcycle_or_404(db: Session, microcycle_id: int) -> Microcycle:
     return microcycle
 
 
-def get_training_day_or_404(db: Session, training_day_id: int) -> TrainingDay:
-    training_day = db.query(TrainingDay).filter(TrainingDay.id == training_day_id).first()
+def get_training_day_or_404(db: Session, training_day_id: int | str) -> TrainingDay:
+    normalized_training_day_id = parse_numeric_identifier(training_day_id, "training_day_id")
+    training_day = db.query(TrainingDay).filter(TrainingDay.id == normalized_training_day_id).first()
     if not training_day:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Training day with id {training_day_id} not found",
+            detail=f"Training day with id {normalized_training_day_id} not found",
         )
     return training_day
 
@@ -371,10 +398,33 @@ def get_current_user(
         raise credentials_exception
 
     user_id, email, token_role = _extract_identity(nutrition_payload)
-    user = _resolve_user(db, user_id, email)
+    user, resolution_source = _resolve_user(db, user_id, email)
 
     if user is None:
+        logger.info(
+            "training_auth_resolution_failed token_user_id=%s email=%s token_role=%s",
+            user_id,
+            email,
+            token_role,
+        )
         raise credentials_exception
+
+    if resolution_source == "email":
+        logger.warning(
+            "training_auth_resolved_via_email token_user_id=%s resolved_user_id=%s email=%s token_role=%s",
+            user_id,
+            user.id,
+            email,
+            token_role,
+        )
+    else:
+        logger.debug(
+            "training_auth_resolved token_user_id=%s resolved_user_id=%s email=%s token_role=%s",
+            user_id,
+            user.id,
+            email,
+            token_role,
+        )
 
     if not user.is_active:
         raise HTTPException(
