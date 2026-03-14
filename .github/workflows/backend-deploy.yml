@@ -125,11 +125,11 @@ jobs:
           PORT="${{ secrets.VPS_PORT }}"
           if [ -z "$PORT" ]; then PORT=22; fi
 
-          TMP_COMPOSE_BASENAME=".fitpilot-training-docker-compose.release.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.yml"
+          TMP_COMPOSE_BASENAME="fitpilot-training-docker-compose.release.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.yml"
 
           sshpass -p "$VPS_PASSWORD" scp -P "$PORT" -o StrictHostKeyChecking=yes \
             docker-compose.release.yml \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:"~/$TMP_COMPOSE_BASENAME"
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$TMP_COMPOSE_BASENAME
 
           sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
