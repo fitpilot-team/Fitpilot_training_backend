@@ -1,34 +1,37 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
-from sqlalchemy.orm import Session, joinedload
+import logging
 from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from models.base import get_db
-from models.user import User
-from models.mesocycle import Microcycle, TrainingDay, DayExercise
-from models.exercise import Exercise
-from models.exercise_muscle import ExerciseMuscle
-from schemas.mesocycle import (
-    TrainingDayCreate, TrainingDayUpdate, TrainingDayResponse
-)
+from sqlalchemy.orm import Session, joinedload
+
 from core.dependencies import (
     assert_macrocycle_access,
     assert_training_professional_access,
-    get_macrocycle_for_microcycle,
     get_current_user,
+    get_macrocycle_for_microcycle,
     get_microcycle_or_404,
     get_training_day_or_404,
 )
+from models.base import get_db
+from models.exercise import Exercise
+from models.exercise_muscle import ExerciseMuscle
+from models.mesocycle import DayExercise, Microcycle, TrainingDay
+from models.user import User
+from schemas.mesocycle import TrainingDayCreate, TrainingDayResponse, TrainingDayUpdate
 from services.metrics_calculator import MuscleVolumeResponse, calculate_muscle_volume
 
 
 class ReorderRequest(BaseModel):
     exercise_ids: List[int]
 
+
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def verify_microcycle_access(db: Session, microcycle_id: int, current_user: User):
-    """Verify user has access to the microcycle through its parent macrocycle"""
+    """Verify user has access to the microcycle through its parent macrocycle."""
     microcycle = get_microcycle_or_404(db, microcycle_id)
     macrocycle = get_macrocycle_for_microcycle(db, microcycle)
     assert_macrocycle_access(
@@ -51,16 +54,17 @@ def get_training_day_with_access(db: Session, training_day_id: int, current_user
 def list_training_days_by_microcycle(
     microcycle_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """List all training days for a specific microcycle"""
-    # Verify access to the microcycle
+    """List all training days for a specific microcycle."""
     verify_microcycle_access(db, microcycle_id, current_user)
 
-    # Get all training days ordered by day_number
-    training_days = db.query(TrainingDay).filter(
-        TrainingDay.microcycle_id == microcycle_id
-    ).order_by(TrainingDay.day_number).all()
+    training_days = (
+        db.query(TrainingDay)
+        .filter(TrainingDay.microcycle_id == microcycle_id)
+        .order_by(TrainingDay.day_number)
+        .all()
+    )
 
     return training_days
 
@@ -70,7 +74,7 @@ def get_muscle_volume(
     training_day_id: int,
     count_secondary: bool = Query(True, description="Count secondary muscles with 0.5x multiplier"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get muscle volume breakdown for a specific training day.
@@ -78,64 +82,88 @@ def get_muscle_volume(
     Returns effective sets and total sets per muscle group, calculated as:
     - Primary muscles: 1x sets contribution
     - Secondary muscles: 0.5x sets contribution (configurable via count_secondary param)
-    - Effective sets: Only series with RIR ≤ 3, RPE ≥ 7, or %1RM ≥ 65%
+    - Effective sets: Only series with RIR <= 3, RPE >= 7, or %1RM >= 65%
     - Warmup exercises are excluded from the calculation
 
     This endpoint is useful for both web and mobile clients to display
     volume distribution charts.
     """
-    # First, check if training day exists (simple query)
     training_day = get_training_day_with_access(db, training_day_id, current_user)
 
-    # Handle rest days
-    if training_day.rest_day:
-        return MuscleVolumeResponse(
-            training_day_id=training_day.id,
-            training_day_name=training_day.name or f"Día {training_day.day_number}",
-            total_effective_sets=0,
-            muscles=[]
+    if not training_day.rest_day:
+        training_day = (
+            db.query(TrainingDay)
+            .options(
+                joinedload(TrainingDay.exercises)
+                .joinedload(DayExercise.exercise)
+                .joinedload(Exercise.exercise_muscles)
+                .joinedload(ExerciseMuscle.muscle)
+            )
+            .filter(TrainingDay.id == training_day_id)
+            .first()
         )
 
-    # Now load with eager loading for muscle calculation
-    training_day = db.query(TrainingDay).options(
-        joinedload(TrainingDay.exercises)
-        .joinedload(DayExercise.exercise)
-        .joinedload(Exercise.exercise_muscles)
-        .joinedload(ExerciseMuscle.muscle)
-    ).filter(TrainingDay.id == training_day_id).first()
+        if training_day is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Training day with id {training_day_id} not found",
+            )
 
-    return calculate_muscle_volume(training_day, count_secondary)
+    try:
+        return calculate_muscle_volume(training_day, count_secondary)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        day_exercise_ids = [
+            day_exercise_id
+            for day_exercise_id in (
+                getattr(day_exercise, "id", None)
+                for day_exercise in getattr(training_day, "exercises", None) or []
+            )
+            if day_exercise_id is not None
+        ]
+        logger.exception(
+            "muscle_volume_failed training_day_id=%s current_user_id=%s count_secondary=%s day_exercise_ids=%s",
+            training_day_id,
+            getattr(current_user, "id", None),
+            count_secondary,
+            day_exercise_ids,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to calculate muscle volume",
+        ) from exc
 
 
 @router.get("/{training_day_id}", response_model=TrainingDayResponse)
 def get_training_day(
     training_day_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """Get a specific training day by ID with all exercises"""
+    """Get a specific training day by ID with all exercises."""
     return get_training_day_with_access(db, training_day_id, current_user)
 
 
-@router.post("/microcycle/{microcycle_id}", response_model=TrainingDayResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/microcycle/{microcycle_id}",
+    response_model=TrainingDayResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_training_day(
     microcycle_id: int,
     training_day_data: TrainingDayCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Create a new training day in a specific microcycle
+    Create a new training day in a specific microcycle.
 
-    Only trainers and admins can create training days
+    Only trainers and admins can create training days.
     """
-    # Only trainer professionals with training plan access (or admin) can create.
     assert_training_professional_access(current_user)
+    verify_microcycle_access(db, microcycle_id, current_user)
 
-    # Verify microcycle exists and user has access
-    microcycle = verify_microcycle_access(db, microcycle_id, current_user)
-
-    # Create training day
     day_dict = training_day_data.model_dump(exclude={"exercises"})
     day_dict["microcycle_id"] = microcycle_id
 
@@ -143,7 +171,6 @@ def create_training_day(
     db.add(new_training_day)
     db.flush()
 
-    # Create day exercises if provided
     if training_day_data.exercises:
         for exercise_data in training_day_data.exercises:
             exercise_dict = exercise_data.model_dump()
@@ -163,18 +190,17 @@ def update_training_day(
     training_day_id: int,
     training_day_data: TrainingDayUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Update an existing training day
+    Update an existing training day.
 
-    Only trainers and admins can update training days
+    Only trainers and admins can update training days.
     """
     assert_training_professional_access(current_user)
 
     training_day = get_training_day_with_access(db, training_day_id, current_user)
 
-    # Update only provided fields
     update_data = training_day_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(training_day, field, value)
@@ -189,13 +215,13 @@ def update_training_day(
 def delete_training_day(
     training_day_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Delete a training day
+    Delete a training day.
 
-    This will cascade delete all associated exercises
-    Only trainers and admins can delete training days
+    This will cascade delete all associated exercises.
+    Only trainers and admins can delete training days.
     """
     assert_training_professional_access(current_user)
 
@@ -207,24 +233,26 @@ def delete_training_day(
     return None
 
 
-@router.post("/{training_day_id}/duplicate", response_model=TrainingDayResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{training_day_id}/duplicate",
+    response_model=TrainingDayResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def duplicate_training_day(
     training_day_id: int,
     new_day_number: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Duplicate an existing training day with all its exercises
+    Duplicate an existing training day with all its exercises.
 
-    Only trainers and admins can duplicate training days
+    Only trainers and admins can duplicate training days.
     """
     assert_training_professional_access(current_user)
 
-    # Get original training day
     original_day = get_training_day_with_access(db, training_day_id, current_user)
 
-    # Create duplicate
     new_day = TrainingDay(
         microcycle_id=original_day.microcycle_id,
         day_number=new_day_number,
@@ -232,12 +260,11 @@ def duplicate_training_day(
         name=f"{original_day.name} (Copy)",
         focus=original_day.focus,
         rest_day=original_day.rest_day,
-        notes=original_day.notes
+        notes=original_day.notes,
     )
     db.add(new_day)
     db.flush()
 
-    # Duplicate exercises
     for original_exercise in original_day.exercises:
         new_exercise = DayExercise(
             training_day_id=new_day.id,
@@ -250,7 +277,7 @@ def duplicate_training_day(
             effort_type=original_exercise.effort_type,
             effort_value=original_exercise.effort_value,
             tempo=original_exercise.tempo,
-            notes=original_exercise.notes
+            notes=original_exercise.notes,
         )
         db.add(new_exercise)
 
@@ -265,7 +292,7 @@ def reorder_exercises(
     training_day_id: int,
     request: ReorderRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Reorder exercises within a training day.
@@ -275,14 +302,17 @@ def reorder_exercises(
     """
     assert_training_professional_access(current_user)
 
-    training_day = get_training_day_with_access(db, training_day_id, current_user)
+    get_training_day_with_access(db, training_day_id, current_user)
 
-    # Update order_index for each exercise
     for index, exercise_id in enumerate(request.exercise_ids):
-        exercise = db.query(DayExercise).filter(
-            DayExercise.id == exercise_id,
-            DayExercise.training_day_id == training_day_id
-        ).first()
+        exercise = (
+            db.query(DayExercise)
+            .filter(
+                DayExercise.id == exercise_id,
+                DayExercise.training_day_id == training_day_id,
+            )
+            .first()
+        )
 
         if exercise:
             exercise.order_index = index
