@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime, date
 from typing import Optional, List, Literal
 from models.workout_log import WorkoutStatus, AbandonReason
@@ -18,11 +18,10 @@ class ExerciseSetLogBase(BaseModel):
     reps_completed: int = Field(ge=0, le=100, description="Reps completed in this set")
     weight_kg: Optional[float] = Field(None, ge=0, le=1000, description="Weight used in kg")
     effort_value: Optional[float] = Field(None, ge=0, le=10, description="RIR/RPE value recorded")
-    notes: Optional[str] = None
 
 
 class ExerciseSetLogCreate(ExerciseSetLogBase):
-    pass
+    model_config = ConfigDict(extra="forbid")
 
 
 class ExerciseSetLogResponse(ExerciseSetLogBase):

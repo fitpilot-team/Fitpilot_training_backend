@@ -116,6 +116,40 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p "$PORT" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
+      - name: Preflight VPS disk space
+        env:
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          PORT="${{ secrets.VPS_PORT }}"
+          if [ -z "$PORT" ]; then PORT=22; fi
+
+          sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+          set -euo pipefail
+          echo "Disk usage before cleanup:"
+          df -h /
+          docker system df || true
+
+          USED_PERCENT="\$(df --output=pcent / | tail -1 | tr -dc '0-9')"
+          if [ "\${USED_PERCENT:-0}" -ge 95 ]; then
+            echo "Disk usage is high; running safe cleanup"
+            docker system prune -af || true
+            docker builder prune -af || true
+            echo "$VPS_PASSWORD" | sudo -S journalctl --vacuum-time=7d || true
+            echo "$VPS_PASSWORD" | sudo -S apt-get clean || true
+          fi
+
+          echo "Disk usage after cleanup:"
+          df -h /
+          docker system df || true
+
+          USED_PERCENT="\$(df --output=pcent / | tail -1 | tr -dc '0-9')"
+          if [ "\${USED_PERCENT:-0}" -ge 98 ]; then
+            echo "Insufficient disk space after cleanup"
+            exit 1
+          fi
+          EOF
+
       - name: Sync release compose to VPS
         env:
           APP_DIR: ${{ steps.meta.outputs.app_dir }}
@@ -127,28 +161,27 @@ jobs:
 
           REMOTE_PATH="$APP_DIR/$REMOTE_COMPOSE_FILE"
           COMPOSE_B64="$(base64 -w0 docker-compose.release.yml)"
+          TMP_COMPOSE_BASENAME="fitpilot-training-docker-compose.release.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.yml"
           sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
           set -euo pipefail
           if ! mkdir -p "$APP_DIR" 2>/dev/null; then
             echo "$VPS_PASSWORD" | sudo -S mkdir -p "$APP_DIR"
           fi
-          EOF
+          TMP_COMPOSE_PATH="\$HOME/$TMP_COMPOSE_BASENAME"
+          printf '%s' '$COMPOSE_B64' | base64 -d > "\$TMP_COMPOSE_PATH"
+          test -s "\$TMP_COMPOSE_PATH"
 
-          if sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "set -euo pipefail; printf '%s' '$COMPOSE_B64' | base64 -d | tee '$REMOTE_PATH' >/dev/null"; then
+          if mv "\$TMP_COMPOSE_PATH" "$REMOTE_PATH" 2>/dev/null; then
             echo "release compose synced to $REMOTE_PATH (without sudo)"
           else
-            sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
-              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-              "set -euo pipefail; printf '%s' '$COMPOSE_B64' | base64 -d | { printf '%s\n' '$VPS_PASSWORD' | sudo -S tee '$REMOTE_PATH' >/dev/null; }"
+            echo "$VPS_PASSWORD" | sudo -S mv "\$TMP_COMPOSE_PATH" "$REMOTE_PATH"
             echo "release compose synced to $REMOTE_PATH (with sudo)"
           fi
 
-          sshpass -p "$VPS_PASSWORD" ssh -p "$PORT" -o StrictHostKeyChecking=yes \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "set -euo pipefail; test -s '$REMOTE_PATH'; wc -c '$REMOTE_PATH'"
+          test -s "$REMOTE_PATH"
+          wc -c "$REMOTE_PATH"
+          EOF
 
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.2.2

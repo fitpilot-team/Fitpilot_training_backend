@@ -36,7 +36,7 @@ if "redis.exceptions" not in sys.modules:
 from api.routers import workout_logs as workout_logs_router  # noqa: E402
 from core.dependencies import get_current_user  # noqa: E402
 from models.base import get_db  # noqa: E402
-from models.mesocycle import Macrocycle, TrainingDay  # noqa: E402
+from models.mesocycle import DayExercise, Macrocycle, TrainingDay  # noqa: E402
 from models.user import UserRole  # noqa: E402
 from models.workout_log import WorkoutLog  # noqa: E402
 
@@ -114,6 +114,38 @@ class NextWorkoutSession:
         raise AssertionError(f"Unexpected model queried: {model}")
 
 
+class LogSetSession:
+    def __init__(self):
+        self.created_set = None
+        self.workout_log = SimpleNamespace(
+            id=37,
+            client_id=13,
+            training_day_id=112,
+            status="in_progress",
+        )
+        self.day_exercise = SimpleNamespace(
+            id=28,
+            training_day_id=112,
+            exercise_id=205,
+        )
+
+    def query(self, model):
+        if model is WorkoutLog:
+            return FakeQuery(self.workout_log)
+        if model is DayExercise:
+            return FakeQuery(self.day_exercise)
+        raise AssertionError(f"Unexpected model queried: {model}")
+
+    def add(self, set_log):
+        self.created_set = set_log
+
+    def commit(self):
+        self.created_set.id = 901
+
+    def refresh(self, set_log):
+        return None
+
+
 def test_start_workout_accepts_string_training_day_id_and_returns_string_ids(monkeypatch) -> None:
     session = StartWorkoutSession()
     current_user = SimpleNamespace(id=13, is_active=True, role=UserRole.CLIENT)
@@ -180,3 +212,79 @@ def test_get_next_workout_serializes_training_day_id_as_string() -> None:
     assert payload["position"] == 1
     assert payload["total"] == 1
     assert payload["all_completed"] is False
+
+
+def test_log_exercise_set_derives_exercise_id_and_omits_series_notes() -> None:
+    session = LogSetSession()
+    current_user = SimpleNamespace(id=13, is_active=True, role=UserRole.CLIENT)
+
+    def override_db():
+        yield session
+
+    app = FastAPI()
+    app.include_router(workout_logs_router.router, prefix="/api/workout-logs")
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: current_user
+
+    try:
+        async def request():
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.post(
+                    "/api/workout-logs/37/sets",
+                    json={
+                        "day_exercise_id": "28",
+                        "set_number": 1,
+                        "reps_completed": 8,
+                        "weight_kg": 20.0,
+                    },
+                )
+
+        response = asyncio.run(request())
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    assert session.created_set.exercise_id == 205
+    payload = response.json()
+    assert payload["id"] == "901"
+    assert payload["workout_log_id"] == "37"
+    assert payload["day_exercise_id"] == "28"
+    assert payload["weight_kg"] == 20.0
+    assert payload["effort_value"] is None
+    assert "notes" not in payload
+
+
+def test_log_exercise_set_rejects_series_notes_in_payload() -> None:
+    session = LogSetSession()
+    current_user = SimpleNamespace(id=13, is_active=True, role=UserRole.CLIENT)
+
+    def override_db():
+        yield session
+
+    app = FastAPI()
+    app.include_router(workout_logs_router.router, prefix="/api/workout-logs")
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: current_user
+
+    try:
+        async def request():
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.post(
+                    "/api/workout-logs/37/sets",
+                    json={
+                        "day_exercise_id": "28",
+                        "set_number": 1,
+                        "reps_completed": 8,
+                        "weight_kg": 20.0,
+                        "notes": "No debe existir",
+                    },
+                )
+
+        response = asyncio.run(request())
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "extra_forbidden"

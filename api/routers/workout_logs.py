@@ -382,13 +382,13 @@ def log_exercise_set(
     # Create set log
     set_log = ExerciseSetLog(
         workout_log_id=workout_log_id,
+        exercise_id=day_exercise.exercise_id,
         day_exercise_id=day_exercise_id,
         set_number=set_data.set_number,
         reps_completed=set_data.reps_completed,
         weight_kg=set_data.weight_kg,
         effort_value=set_data.effort_value,
         completed_at=utc_now(),
-        notes=set_data.notes
     )
     db.add(set_log)
     db.commit()
