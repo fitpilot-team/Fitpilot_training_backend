@@ -291,3 +291,15 @@ class MacrocycleResponse(MacrocycleBase):
 class MacrocycleListResponse(BaseModel):
     total: int
     macrocycles: List[MacrocycleResponse]
+
+
+class MacrocyclePaletteResult(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    id: str
+    title: str
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    status: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

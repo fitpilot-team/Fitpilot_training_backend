@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from typing import Optional
 from datetime import datetime
 
@@ -30,3 +30,14 @@ class ClientResponse(BaseModel):
 class ClientListResponse(BaseModel):
     clients: list[ClientResponse]
     total: int
+
+
+class ClientPaletteResult(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    id: str
+    name: str
+    lastname: Optional[str] = None
+    display_name: str
+    email: Optional[str] = None
+    is_active: bool
