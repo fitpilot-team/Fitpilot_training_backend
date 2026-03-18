@@ -1,12 +1,14 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from typing import Optional
+from core.database_url import validate_remote_database_url
 
 
 class Settings(BaseSettings):
     """Application settings"""
 
     # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/fitpilot_db"
+    DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379"
 
     # API Keys
@@ -40,8 +42,7 @@ class Settings(BaseSettings):
     NUTRITION_AUTH_TIMEOUT_SECONDS: int = 8
     NUTRITION_AUTH_CACHE_TTL_SECONDS: int = 25
 
-    # Exercise media storage
-    EXERCISE_MEDIA_PROVIDER: str = "local"  # local | r2
+    # Exercise media storage (R2 only)
     R2_ENDPOINT: Optional[str] = None
     R2_REGION: str = "auto"
     R2_BUCKET: Optional[str] = None
@@ -58,6 +59,11 @@ class Settings(BaseSettings):
     AI_USE_COMPRESSED_OUTPUT: bool = True
     AI_FILTER_CATALOG: bool = True
     AI_USE_PHASED_GENERATION: bool = True
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def database_url_must_be_remote(cls, value: str) -> str:
+        return validate_remote_database_url(value)
 
     model_config = SettingsConfigDict(
         env_file=".env",

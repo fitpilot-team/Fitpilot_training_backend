@@ -3,6 +3,8 @@
 Este backend forma parte del stack local orquestado desde:
 `C:\Users\ale_o\Fit-pilot1.0\docker-compose.yml`
 
+La base de datos es remote-only en desarrollo y produccion. `DATABASE_URL` debe apuntar a una instancia PostgreSQL remota; hosts locales o aliases Docker se rechazan al arrancar.
+
 ### Flujo recomendado
 
 1. Copiar plantilla de variables especificas de training:
@@ -86,15 +88,18 @@ The upgrade is idempotent and covers:
 - enum normalization to lowercase where required by frontend contract
 - ID sequence/default setup for insert paths
 
-## Exercise media storage providers
+## Remote-only database guardrail
 
-`EXERCISE_MEDIA_PROVIDER`:
-- `local`: stores files under `static/exercises` and persists `/static/exercises/...`
-- `r2`: uploads to Cloudflare R2 and persists public CDN URL (`R2_PUBLIC_BASE_URL/...`)
+- `DATABASE_URL` no puede apuntar a `localhost`, `127.0.0.1`, `::1`, `postgres`, `db` ni `host.docker.internal`
+- usa siempre un DSN remoto con `sslmode=require` como baseline
 
-Dual-read compatibility remains enabled:
-- legacy URLs `/static/...` continue to work via FastAPI static mount
-- new uploads can target R2
+## Exercise media storage
+
+Exercise media now uploads only to Cloudflare R2 and persists public CDN URLs (`R2_PUBLIC_BASE_URL/...`).
+
+Legacy-read compatibility remains enabled:
+- existing `/static/exercises/...` URLs continue to work while records are migrated
+- new `image_url`, `thumbnail_url` and `anatomy_image_url` no longer write to local disk
 
 ## Media migration script
 
@@ -117,7 +122,7 @@ The script migrates only legacy `/static/...` URLs for:
 
 It does not delete local files.
 
-## Suggested `/static` retirement criteria
+## Suggested `/static/exercises` retirement criteria
 
 1. Run migration in apply mode and resolve missing/upload errors.
 2. Verify frontend exercise pages and program editor load images without `/static` dependencies.

@@ -406,9 +406,10 @@ async def fetch_movement_image(
     from services.wger_image import fetch_movement_image as fetch_wger_image, get_mapped_name
 
     exercise = _require_existing_exercise(exercise_id, db)
+    old_thumbnail_url = exercise.thumbnail_url
 
     search_name = get_mapped_name(exercise.name_en)
-    image_url = fetch_wger_image(search_name)
+    image_url = fetch_wger_image(str(exercise_id), search_name)
 
     if not image_url:
         raise HTTPException(
@@ -418,6 +419,12 @@ async def fetch_movement_image(
 
     exercise.thumbnail_url = image_url
     db.commit()
+
+    if old_thumbnail_url and old_thumbnail_url != image_url:
+        try:
+            delete_exercise_media(old_thumbnail_url)
+        except StorageError:
+            pass
 
     return build_exercise_response(_require_existing_exercise(exercise_id, db))
 
@@ -432,6 +439,7 @@ async def generate_anatomy_image(
     from services.muscle_image import generate_muscle_image_sync
 
     exercise = _require_existing_exercise(exercise_id, db)
+    old_anatomy_image_url = exercise.anatomy_image_url
 
     primary_relation = next(
         (em for em in exercise.exercise_muscles if em.muscle_role == "primary"),
@@ -444,6 +452,7 @@ async def generate_anatomy_image(
         )
 
     image_url = generate_muscle_image_sync(
+        exercise_id=str(exercise_id),
         muscle_group=primary_relation.muscle.name,
         exercise_name=exercise.name_en,
         use_multicolor=True,
@@ -457,5 +466,11 @@ async def generate_anatomy_image(
 
     exercise.anatomy_image_url = image_url
     db.commit()
+
+    if old_anatomy_image_url and old_anatomy_image_url != image_url:
+        try:
+            delete_exercise_media(old_anatomy_image_url)
+        except StorageError:
+            pass
 
     return build_exercise_response(_require_existing_exercise(exercise_id, db))

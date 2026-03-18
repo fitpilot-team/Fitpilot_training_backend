@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from core.config import settings
+from services.exercise_media_storage import ensure_exercise_media_storage_config
 from api.routers import (
     ai_generator,
     auth,
@@ -23,6 +24,11 @@ app = FastAPI(
     version="1.0.0",
     description="API for workout routine management with AI-powered generation"
 )
+
+
+@app.on_event("startup")
+def validate_exercise_media_storage() -> None:
+    ensure_exercise_media_storage_config()
 
 # CORS configuration - explicit origins for credentials, plus local network for dev/mobile testing
 LOCAL_LAN_ORIGIN_REGEX = (
