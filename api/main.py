@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from core.config import settings
-from services.exercise_media_storage import ensure_exercise_media_storage_config
+from core.cors import LOCAL_LAN_ORIGIN_REGEX, resolve_allowed_origins
 from api.routers import (
     ai_generator,
     auth,
@@ -25,41 +25,7 @@ app = FastAPI(
     description="API for workout routine management with AI-powered generation"
 )
 
-
-@app.on_event("startup")
-def validate_exercise_media_storage() -> None:
-    ensure_exercise_media_storage_config()
-
-# CORS configuration - explicit origins for credentials, plus local network for dev/mobile testing
-LOCAL_LAN_ORIGIN_REGEX = (
-    r"https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}"
-    r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?"
-)
-
-
-def _resolve_allowed_origins() -> list[str]:
-    configured_origins = [
-        origin.strip().rstrip("/")
-        for origin in (settings.CORS_ALLOWED_ORIGINS or "").split(",")
-        if origin and origin.strip()
-    ]
-
-    frontend_origin = settings.FRONTEND_URL.strip().rstrip("/") if settings.FRONTEND_URL else ""
-    if frontend_origin:
-        configured_origins.append(frontend_origin)
-
-    # Docker/local default for this workspace deployment.
-    configured_origins.append("http://localhost:4000")
-
-    deduped_origins: list[str] = []
-    for origin in configured_origins:
-        if origin and origin not in deduped_origins:
-            deduped_origins.append(origin)
-
-    return deduped_origins or ["http://localhost:3000", "http://localhost:4000"]
-
-
-allowed_origins = _resolve_allowed_origins()
+allowed_origins = resolve_allowed_origins(settings)
 
 app.add_middleware(
     CORSMiddleware,
