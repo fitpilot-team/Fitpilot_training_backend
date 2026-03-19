@@ -3,16 +3,50 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from typing import Optional
 from models.base import get_db
+from models.mesocycle import Macrocycle
 from models.user import User, UserRole
-from schemas.client import ClientCreate, ClientUpdate, ClientResponse, ClientListResponse
+from schemas.client import (
+    ClientCreate,
+    ClientUpdate,
+    ClientResponse,
+    ClientListResponse,
+    ClientPaletteResult,
+)
 from core.security import get_password_hash
-from core.dependencies import assert_training_professional_access, get_current_user
+from core.dependencies import (
+    assert_training_professional_access,
+    get_current_user,
+    get_effective_user_role,
+)
 
 router = APIRouter()
 
 
 def _ensure_training_access(current_user: User) -> None:
     assert_training_professional_access(current_user)
+
+
+def _normalize_palette_query(q: str) -> str:
+    return q.strip()
+
+
+def _resolve_palette_limit(limit: int) -> int:
+    return min(limit, 10)
+
+
+def _build_client_display_name(client: User) -> str:
+    return " ".join(part.strip() for part in [client.name or "", client.lastname or ""] if part and part.strip())
+
+
+def _build_client_palette_result(client: User) -> ClientPaletteResult:
+    return ClientPaletteResult(
+        id=str(client.id),
+        name=client.name,
+        lastname=client.lastname,
+        display_name=_build_client_display_name(client),
+        email=client.email,
+        is_active=bool(client.is_active),
+    )
 
 
 @router.get("/", response_model=ClientListResponse)
@@ -45,6 +79,55 @@ def get_clients(
     clients = query.order_by(User.name.asc(), User.lastname.asc()).offset(skip).limit(limit).all()
 
     return ClientListResponse(clients=clients, total=total)
+
+
+@router.get("/palette-search", response_model=list[ClientPaletteResult])
+def palette_search_clients(
+    q: str = Query(""),
+    limit: int = Query(8, ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    normalized_query = _normalize_palette_query(q)
+    if len(normalized_query) < 2:
+        return []
+
+    effective_role = get_effective_user_role(current_user)
+    if effective_role == "client":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clients are not allowed to access professional palette search",
+        )
+
+    _ensure_training_access(current_user)
+
+    search_filter = f"%{normalized_query}%"
+    full_name_expr = func.trim(func.concat(User.name, " ", func.coalesce(User.lastname, "")))
+    query = db.query(User).filter(User.role == UserRole.CLIENT)
+
+    if effective_role == "trainer":
+        # Phase 4 heuristic: training repo only persists trainer-client ownership
+        # through macrocycles, so palette client scope is derived from those links.
+        query = query.join(Macrocycle, Macrocycle.client_id == User.id).filter(
+            Macrocycle.trainer_id == current_user.id
+        )
+
+    clients = (
+        query.filter(
+            or_(
+                full_name_expr.ilike(search_filter),
+                User.name.ilike(search_filter),
+                User.lastname.ilike(search_filter),
+                User.email.ilike(search_filter),
+            )
+        )
+        .distinct()
+        .order_by(User.name.asc(), User.lastname.asc())
+        .limit(_resolve_palette_limit(limit))
+        .all()
+    )
+
+    return [_build_client_palette_result(client) for client in clients]
 
 
 @router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)

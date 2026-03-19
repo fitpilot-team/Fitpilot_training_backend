@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, aliased, joinedload
 from typing import Optional
 from models.base import get_db
 from models.user import User
@@ -8,6 +9,7 @@ from models.exercise import Exercise
 from models.exercise_muscle import ExerciseMuscle
 from schemas.mesocycle import (
     MacrocycleCreate, MacrocycleUpdate, MacrocycleResponse, MacrocycleListResponse,
+    MacrocyclePaletteResult,
     MesocycleCreate, MesocycleUpdate, MesocycleResponse, MesocycleListResponse,
     MicrocycleCreate, MicrocycleUpdate, MicrocycleResponse,
     TrainingDayCreate, TrainingDayUpdate, TrainingDayResponse,
@@ -21,6 +23,42 @@ from core.dependencies import (
 )
 
 router = APIRouter()
+
+
+def _normalize_palette_query(q: str) -> str:
+    return q.strip()
+
+
+def _resolve_palette_limit(limit: int) -> int:
+    return min(limit, 10)
+
+
+def _enum_value(value):
+    return value.value if hasattr(value, "value") else value
+
+
+def _build_macrocycle_client_name(macrocycle: Macrocycle) -> Optional[str]:
+    client = getattr(macrocycle, "client", None)
+    if client is None:
+        return None
+    display_name = " ".join(
+        part.strip()
+        for part in [client.name or "", client.lastname or ""]
+        if part and part.strip()
+    )
+    return display_name or None
+
+
+def _build_macrocycle_palette_result(macrocycle: Macrocycle) -> MacrocyclePaletteResult:
+    return MacrocyclePaletteResult(
+        id=str(macrocycle.id),
+        title=macrocycle.name,
+        client_id=str(macrocycle.client_id) if macrocycle.client_id is not None else None,
+        client_name=_build_macrocycle_client_name(macrocycle),
+        status=str(_enum_value(macrocycle.status)),
+        created_at=macrocycle.created_at,
+        updated_at=macrocycle.updated_at,
+    )
 
 
 # =============== Macrocycle Endpoints ===============
@@ -76,6 +114,55 @@ def list_macrocycles(
         "total": total,
         "macrocycles": macrocycles
     }
+
+
+@router.get("/palette-search", response_model=list[MacrocyclePaletteResult])
+def palette_search_macrocycles(
+    q: str = Query(""),
+    limit: int = Query(8, ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    normalized_query = _normalize_palette_query(q)
+    if len(normalized_query) < 2:
+        return []
+
+    role = get_effective_user_role(current_user)
+    if role == "client":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clients are not allowed to access professional palette search",
+        )
+
+    assert_training_professional_access(current_user)
+
+    client_alias = aliased(User)
+    full_name_expr = func.trim(func.concat(client_alias.name, " ", func.coalesce(client_alias.lastname, "")))
+    search_pattern = f"%{normalized_query}%"
+
+    query = (
+        db.query(Macrocycle)
+        .outerjoin(client_alias, Macrocycle.client_id == client_alias.id)
+        .options(joinedload(Macrocycle.client))
+        .filter(
+            or_(
+                Macrocycle.name.ilike(search_pattern),
+                Macrocycle.objective.ilike(search_pattern),
+                full_name_expr.ilike(search_pattern),
+            )
+        )
+    )
+
+    if role == "trainer":
+        query = query.filter(Macrocycle.trainer_id == current_user.id)
+
+    macrocycles = (
+        query.order_by(Macrocycle.created_at.desc(), Macrocycle.id.desc())
+        .limit(_resolve_palette_limit(limit))
+        .all()
+    )
+
+    return [_build_macrocycle_palette_result(macrocycle) for macrocycle in macrocycles]
 
 
 @router.get("/{macrocycle_id}", response_model=MacrocycleResponse)

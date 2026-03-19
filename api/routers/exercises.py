@@ -10,13 +10,24 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
-from core.dependencies import require_trainer
+from core.dependencies import (
+    assert_training_professional_access,
+    get_current_user,
+    get_effective_user_role,
+    require_trainer,
+)
 from models.base import get_db
 from models.exercise import CardioSubclass, Exercise, ExerciseClass, ExerciseType, ResistanceProfile
 from models.exercise_muscle import ExerciseMuscle
 from models.muscle import Muscle
 from models.user import User
-from schemas.exercise import ExerciseCreate, ExerciseListResponse, ExerciseResponse, ExerciseUpdate
+from schemas.exercise import (
+    ExerciseCreate,
+    ExerciseListResponse,
+    ExercisePaletteResult,
+    ExerciseResponse,
+    ExerciseUpdate,
+)
 from schemas.muscle import ExerciseMuscleResponse
 from services.exercise_media_storage import (
     StorageError,
@@ -53,6 +64,14 @@ def _resolve_response_timestamps(exercise: Exercise) -> tuple[datetime, datetime
     created_at = exercise.created_at or exercise.updated_at or _utcnow_naive()
     updated_at = exercise.updated_at or created_at
     return created_at, updated_at
+
+
+def _normalize_palette_query(q: str) -> str:
+    return q.strip()
+
+
+def _resolve_palette_limit(limit: int) -> int:
+    return min(limit, 10)
 
 
 def build_exercise_response(exercise: Exercise) -> dict:
@@ -100,6 +119,19 @@ def build_exercise_response(exercise: Exercise) -> dict:
         "created_at": created_at,
         "updated_at": updated_at,
     }
+
+
+def build_exercise_palette_result(exercise: Exercise) -> ExercisePaletteResult:
+    display_name = exercise.name_es or exercise.name_en
+    return ExercisePaletteResult(
+        id=str(exercise.id),
+        name_en=exercise.name_en,
+        name_es=exercise.name_es,
+        display_name=display_name,
+        exercise_class=str(_enum_value(exercise.exercise_class)),
+        difficulty_level=exercise.difficulty_level,
+        primary_muscle_names=list(exercise.primary_muscle_names),
+    )
 
 
 def _require_existing_exercise(exercise_id: int, db: Session) -> Exercise:
@@ -197,6 +229,42 @@ def list_exercises(
     exercises = query.distinct().order_by(Exercise.id).offset(skip).limit(limit).all()
 
     return {"total": total, "exercises": [build_exercise_response(ex) for ex in exercises]}
+
+
+@router.get("/palette-search", response_model=list[ExercisePaletteResult])
+def palette_search_exercises(
+    q: str = Query(""),
+    limit: int = Query(8, ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    normalized_query = _normalize_palette_query(q)
+    if len(normalized_query) < 2:
+        return []
+
+    effective_role = get_effective_user_role(current_user)
+    if effective_role == "client":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clients are not allowed to access professional palette search",
+        )
+
+    assert_training_professional_access(current_user)
+
+    search_pattern = f"%{normalized_query}%"
+    exercises = (
+        db.query(Exercise)
+        .options(joinedload(Exercise.exercise_muscles).joinedload(ExerciseMuscle.muscle))
+        .filter(
+            (Exercise.name_en.ilike(search_pattern))
+            | (Exercise.name_es.ilike(search_pattern))
+        )
+        .order_by(Exercise.id.asc())
+        .limit(_resolve_palette_limit(limit))
+        .all()
+    )
+
+    return [build_exercise_palette_result(exercise) for exercise in exercises]
 
 
 @router.get("/{exercise_id}", response_model=ExerciseResponse)

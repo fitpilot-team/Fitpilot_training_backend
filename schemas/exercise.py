@@ -164,3 +164,15 @@ class ExerciseListResponse(BaseModel):
     """Schema for list of Exercises response."""
     total: int
     exercises: List[ExerciseResponse]
+
+
+class ExercisePaletteResult(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    id: str
+    name_en: str
+    name_es: Optional[str] = None
+    display_name: str
+    exercise_class: str
+    difficulty_level: Optional[str] = None
+    primary_muscle_names: List[str]
