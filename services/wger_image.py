@@ -6,7 +6,7 @@ from typing import Optional, Dict
 
 import requests
 
-from services.exercise_media_storage import StorageError, upload_exercise_media_bytes
+from services.media_storage import StorageError, upload_exercise_media_bytes
 
 # Wger API base URL
 WGER_API_URL = "https://wger.de/api/v2"

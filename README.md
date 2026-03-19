@@ -4,6 +4,7 @@ Este backend forma parte del stack local orquestado desde:
 `C:\Users\ale_o\Fit-pilot1.0\docker-compose.yml`
 
 La base de datos es remote-only en desarrollo y produccion. `DATABASE_URL` debe apuntar a una instancia PostgreSQL remota; hosts locales o aliases Docker se rechazan al arrancar.
+Cuando el DSN usa el pooler compartido de Supabase en session mode, usa un pool pequeno en la app (`DATABASE_POOL_SIZE=1`, `DATABASE_MAX_OVERFLOW=0`) para evitar `MaxClientsInSessionMode`.
 
 ### Flujo recomendado
 
@@ -97,36 +98,28 @@ The upgrade is idempotent and covers:
 
 Exercise media now uploads only to Cloudflare R2 and persists public CDN URLs (`R2_PUBLIC_BASE_URL/...`).
 
-Legacy-read compatibility remains enabled:
-- existing `/static/exercises/...` URLs continue to work while records are migrated
-- new `image_url`, `thumbnail_url` and `anatomy_image_url` no longer write to local disk
+New exercise media and profile images no longer write to local disk.
 
-## Media migration script
+## Legacy image cleanup script
 
 Dry-run:
 
 ```bash
-python scripts/migrate_exercise_media_to_r2.py
+python scripts/cleanup_legacy_local_image_urls.py
 ```
 
 Apply:
 
 ```bash
-python scripts/migrate_exercise_media_to_r2.py --apply
+python scripts/cleanup_legacy_local_image_urls.py --apply
 ```
 
-The script migrates only legacy `/static/...` URLs for:
+The script nulls legacy local image URLs for:
 - `image_url`
 - `thumbnail_url`
 - `anatomy_image_url`
+- `profile_picture`
 
-It does not delete local files.
-
-## Suggested `/static/exercises` retirement criteria
-
-1. Run migration in apply mode and resolve missing/upload errors.
-2. Verify frontend exercise pages and program editor load images without `/static` dependencies.
-3. Confirm no critical DB records still reference `/static/exercises/...`.
-4. Remove local media serving only after full verification in staging/production.
+No local image compatibility remains enabled after this cleanup.
 
 

@@ -1,4 +1,5 @@
 import enum
+import re
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -21,6 +22,9 @@ def _db_user_role_values(_: type[UserRole]) -> list[str]:
 class ProfessionalRole(str, enum.Enum):
     NUTRITIONIST = "NUTRITIONIST"
     TRAINER = "TRAINER"
+
+
+ABSOLUTE_URL_PATTERN = re.compile(r"^https?://|^//", re.IGNORECASE)
 
 
 class User(Base):
@@ -87,7 +91,9 @@ class User(Base):
 
     @property
     def profile_image_url(self) -> str | None:
-        return self.profile_picture
+        if not self.profile_picture:
+            return None
+        return self.profile_picture if ABSOLUTE_URL_PATTERN.match(self.profile_picture) else None
 
     @profile_image_url.setter
     def profile_image_url(self, value: str | None) -> None:

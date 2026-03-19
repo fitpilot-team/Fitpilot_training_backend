@@ -29,9 +29,9 @@ from schemas.exercise import (
     ExerciseUpdate,
 )
 from schemas.muscle import ExerciseMuscleResponse
-from services.exercise_media_storage import (
+from services.media_storage import (
     StorageError,
-    delete_exercise_media,
+    delete_managed_media,
     upload_exercise_media,
 )
 
@@ -46,6 +46,12 @@ def _enum_value(value):
     if isinstance(value, Enum):
         return value.value
     return value
+
+
+def _normalize_managed_media_url(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value if value.startswith(("http://", "https://", "//")) else None
 
 
 def _safe_muscle_display_name(muscle: Muscle) -> str:
@@ -103,9 +109,9 @@ def build_exercise_response(exercise: Exercise) -> dict:
         "description_en": exercise.description_en,
         "description_es": exercise.description_es,
         "video_url": exercise.video_url,
-        "thumbnail_url": exercise.thumbnail_url,
-        "image_url": exercise.image_url,
-        "anatomy_image_url": exercise.anatomy_image_url,
+        "thumbnail_url": _normalize_managed_media_url(exercise.thumbnail_url),
+        "image_url": _normalize_managed_media_url(exercise.image_url),
+        "anatomy_image_url": _normalize_managed_media_url(exercise.anatomy_image_url),
         "equipment_needed": exercise.equipment_needed,
         "difficulty_level": exercise.difficulty_level,
         "exercise_class": _enum_value(exercise.exercise_class),
@@ -428,7 +434,7 @@ async def upload_exercise_image(
 
     if old_image_url and old_image_url != new_image_url:
         try:
-            delete_exercise_media(old_image_url)
+            delete_managed_media(old_image_url)
         except StorageError:
             pass
 
@@ -451,7 +457,7 @@ def delete_exercise_image(
         )
 
     try:
-        delete_exercise_media(exercise.image_url)
+        delete_managed_media(exercise.image_url)
     except StorageError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -490,7 +496,7 @@ async def fetch_movement_image(
 
     if old_thumbnail_url and old_thumbnail_url != image_url:
         try:
-            delete_exercise_media(old_thumbnail_url)
+            delete_managed_media(old_thumbnail_url)
         except StorageError:
             pass
 
@@ -537,7 +543,7 @@ async def generate_anatomy_image(
 
     if old_anatomy_image_url and old_anatomy_image_url != image_url:
         try:
-            delete_exercise_media(old_anatomy_image_url)
+            delete_managed_media(old_anatomy_image_url)
         except StorageError:
             pass
 

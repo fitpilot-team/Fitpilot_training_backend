@@ -36,10 +36,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files configuration
-STATIC_DIR = Path(__file__).parent.parent / "static"
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Static video files configuration
+VIDEO_STATIC_DIR = Path(__file__).parent.parent / "static" / "videos"
+VIDEO_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static/videos", StaticFiles(directory=str(VIDEO_STATIC_DIR)), name="static-videos")
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

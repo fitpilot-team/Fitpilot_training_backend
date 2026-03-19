@@ -7,7 +7,7 @@ from typing import Optional
 
 import httpx
 
-from services.exercise_media_storage import StorageError, upload_exercise_media_bytes
+from services.media_storage import StorageError, upload_exercise_media_bytes
 
 MUSCLE_API_URL = os.getenv("MUSCLE_API_URL", "http://muscle-image-api:80")
 

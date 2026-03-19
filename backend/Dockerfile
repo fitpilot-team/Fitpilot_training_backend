@@ -15,9 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create static directories with proper permissions
-RUN mkdir -p /app/static/exercises /app/static/profiles /app/static/videos && \
-    chmod -R 777 /app/static
+# Create static video directory with proper permissions
+RUN mkdir -p /app/static/videos && \
+    chmod -R 777 /app/static/videos
 
 # Expose port
 EXPOSE 8000

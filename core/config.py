@@ -9,6 +9,10 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str
+    DATABASE_POOL_SIZE: int = 1
+    DATABASE_MAX_OVERFLOW: int = 0
+    DATABASE_POOL_TIMEOUT_SECONDS: int = 5
+    DATABASE_POOL_RECYCLE_SECONDS: int = 300
     REDIS_URL: str = "redis://localhost:6379"
 
     # API Keys
