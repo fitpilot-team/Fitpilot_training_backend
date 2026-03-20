@@ -24,7 +24,7 @@ docker compose --env-file .env.fit-pilot10 -f docker-compose.yml up -d --build t
 
 En modo integracion local:
 - `NUTRITION_API_URL=http://nutrition-backend:3000`
-- `NUTRITION_AUTH_ME_PATH=/v1/auth/me`
+- `NUTRITION_AUTH_ME_PATH=/v1/auth/introspect`
 - `REDIS_URL=redis://app:<password-url-encoded>@fitpilot-redis:6379/0`
 
 El backend de training valida JWT emitidos por nutrition usando ese endpoint interno.
@@ -66,7 +66,7 @@ The only supported frontend codebase is:
 ## Auth compatibility (Nutrition -> Training)
 
 Training endpoints accept:
-- Nutrition JWT via `NUTRITION_API_URL + NUTRITION_AUTH_ME_PATH` (`/v1/auth/me`)
+- Nutrition JWT via `NUTRITION_API_URL + NUTRITION_AUTH_ME_PATH` (`/v1/auth/introspect` by default)
 
 `/api/auth/login` is intentionally deprecated for operational use. Authenticate against Nutrition API and reuse that Bearer token for Training API.
 
@@ -121,5 +121,4 @@ The script nulls legacy local image URLs for:
 - `profile_picture`
 
 No local image compatibility remains enabled after this cleanup.
-
 

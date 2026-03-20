@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Cross-service auth compatibility (Nutrition -> Training)
     NUTRITION_API_URL: Optional[str] = None
-    NUTRITION_AUTH_ME_PATH: str = "/v1/auth/me"
+    NUTRITION_AUTH_ME_PATH: str = "/v1/auth/introspect"
     NUTRITION_AUTH_TIMEOUT_SECONDS: int = 8
     NUTRITION_AUTH_CACHE_TTL_SECONDS: int = 25
 

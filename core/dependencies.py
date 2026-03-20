@@ -1,16 +1,20 @@
+import logging
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from core.config import settings
 from core.security import introspect_nutrition_token_cached, normalize_auth_role
+from core.timing import elapsed_ms, format_timing_fields
 from models.base import get_db
 from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay
 from models.user import ProfessionalRole, User
 
+logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 
@@ -26,7 +30,7 @@ class TrainingAccessContext:
 
 
 def _extract_identity(payload: dict | None) -> tuple[str | None, str | None, str | None]:
-    """Extract (user_id, email, role) from either local JWT or Nutrition /auth/me payloads."""
+    """Extract (user_id, email, role) from either local JWT or Nutrition introspection payloads."""
     if not payload:
         return None, None, None
 
@@ -62,6 +66,11 @@ def _resolve_user(db: Session, user_id: str | None, email: str | None) -> User |
 def _extract_auth_payload(user: User) -> dict[str, Any]:
     payload = getattr(user, "_auth_payload", None)
     return payload if isinstance(payload, dict) else {}
+
+
+def _should_log_auth_timing(user: User | None) -> bool:
+    request_path = getattr(user, "_request_path", "")
+    return isinstance(request_path, str) and request_path.startswith("/api/mesocycles")
 
 
 def _normalize_plan_name(value: str) -> str:
@@ -250,31 +259,57 @@ def has_trainer_professional_role(context: TrainingAccessContext) -> bool:
 
 
 def assert_training_module_access(current_user: User) -> TrainingAccessContext:
-    context = get_training_access_context(current_user)
-    if context.is_admin:
+    started_at = perf_counter()
+
+    try:
+        context = get_training_access_context(current_user)
+        if context.is_admin:
+            return context
+
+        if not context.has_training_plan_access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Se requiere un plan con acceso a entrenamiento para esta accion",
+            )
+
         return context
-
-    if not context.has_training_plan_access:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere un plan con acceso a entrenamiento para esta accion",
-        )
-
-    return context
+    finally:
+        if _should_log_auth_timing(current_user):
+            logger.info(
+                "[auth.assert_training_module_access] %s",
+                format_timing_fields({"total": elapsed_ms(started_at)}),
+            )
 
 
 def assert_training_professional_access(current_user: User) -> TrainingAccessContext:
-    context = assert_training_module_access(current_user)
-    if context.is_admin:
+    started_at = perf_counter()
+    module_access_ms = 0.0
+
+    try:
+        module_access_started_at = perf_counter()
+        context = assert_training_module_access(current_user)
+        module_access_ms = elapsed_ms(module_access_started_at)
+        if context.is_admin:
+            return context
+
+        if not context.has_trainer_professional_role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Se requiere rol profesional TRAINER para esta accion",
+            )
+
         return context
-
-    if not context.has_trainer_professional_role:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol profesional TRAINER para esta accion",
-        )
-
-    return context
+    finally:
+        if _should_log_auth_timing(current_user):
+            logger.info(
+                "[auth.assert_training_professional_access] %s",
+                format_timing_fields(
+                    {
+                        "module_access": module_access_ms,
+                        "total": elapsed_ms(started_at),
+                    }
+                ),
+            )
 
 
 def get_macrocycle_or_404(db: Session, macrocycle_id: int) -> Macrocycle:
@@ -348,46 +383,79 @@ def assert_macrocycle_access(
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """Get the current authenticated user (Nutrition token introspection only)."""
+    """Get the current authenticated user through Nutrition token introspection."""
+    started_at = perf_counter()
+    introspection_ms = 0.0
+    resolve_user_ms = 0.0
+    active_check_ms = 0.0
+    attach_ms = 0.0
 
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    if not settings.NUTRITION_API_URL:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="NUTRITION_API_URL is required for training auth",
+    try:
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = credentials.credentials
-    nutrition_payload = introspect_nutrition_token_cached(token)
-    if nutrition_payload is None:
-        raise credentials_exception
+        if not settings.NUTRITION_API_URL:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="NUTRITION_API_URL is required for training auth",
+            )
 
-    user_id, email, token_role = _extract_identity(nutrition_payload)
-    user = _resolve_user(db, user_id, email)
+        token = credentials.credentials
 
-    if user is None:
-        raise credentials_exception
+        introspection_started_at = perf_counter()
+        nutrition_payload = introspect_nutrition_token_cached(token)
+        introspection_ms = elapsed_ms(introspection_started_at)
+        if nutrition_payload is None:
+            raise credentials_exception
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
-        )
+        user_id, email, token_role = _extract_identity(nutrition_payload)
 
-    setattr(user, "_auth_payload", nutrition_payload)
+        resolve_user_started_at = perf_counter()
+        user = _resolve_user(db, user_id, email)
+        resolve_user_ms = elapsed_ms(resolve_user_started_at)
 
-    if token_role:
-        setattr(user, "_effective_auth_role", token_role)
+        if user is None:
+            raise credentials_exception
 
-    return user
+        active_check_started_at = perf_counter()
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Inactive user"
+            )
+        active_check_ms = elapsed_ms(active_check_started_at)
+
+        attach_started_at = perf_counter()
+        setattr(user, "_auth_payload", nutrition_payload)
+        setattr(user, "_request_path", request.url.path)
+        setattr(user, "_request_method", request.method)
+
+        if token_role:
+            setattr(user, "_effective_auth_role", token_role)
+        attach_ms = elapsed_ms(attach_started_at)
+
+        return user
+    finally:
+        if request.url.path.startswith("/api/mesocycles"):
+            logger.info(
+                "[auth.get_current_user] %s",
+                format_timing_fields(
+                    {
+                        "introspect": introspection_ms,
+                        "resolve_user": resolve_user_ms,
+                        "active_check": active_check_ms,
+                        "attach": attach_ms,
+                        "total": elapsed_ms(started_at),
+                    }
+                ),
+            )
 
 
 def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:

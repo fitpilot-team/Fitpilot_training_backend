@@ -10,6 +10,7 @@ import time
 from core.config import settings
 from core.redis_cache import get_json as redis_get_json
 from core.redis_cache import set_json as redis_set_json
+from core.timing import elapsed_ms
 
 # Password hashing - using argon2 (more secure and no length limitations)
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -137,6 +138,7 @@ def _prune_cache_locked(now_epoch: float) -> None:
 
 
 def _get_cached_introspection(token: str) -> Optional[dict[str, Any]]:
+    started_at = time.perf_counter()
     redis_key = _token_redis_cache_key(token)
     redis_payload = redis_get_json(redis_key)
     if redis_payload is not None:
@@ -145,6 +147,7 @@ def _get_cached_introspection(token: str) -> Optional[dict[str, Any]]:
             with _auth_cache_lock:
                 _auth_introspection_cache[_token_cache_key(token)] = (redis_payload, redis_expires_at)
         logger.debug("auth_cache_hit source=redis")
+        logger.info("[auth.introspection.cache] source=redis total=%.2fms", elapsed_ms(started_at))
         return redis_payload
 
     now_epoch = time.time()
@@ -163,6 +166,7 @@ def _get_cached_introspection(token: str) -> Optional[dict[str, Any]]:
             return None
 
         logger.debug("auth_cache_hit source=memory ttl_remaining_seconds=%.2f", expires_at - now_epoch)
+        logger.info("[auth.introspection.cache] source=memory total=%.2fms", elapsed_ms(started_at))
         return payload
 
 
@@ -185,14 +189,15 @@ def _set_cached_introspection(token: str, payload: dict[str, Any]) -> None:
 
 def introspect_nutrition_token(token: str) -> Optional[dict[str, Any]]:
     """
-    Validate a token against the Nutrition API (/v1/auth/me).
+    Validate a token against the Nutrition introspection endpoint.
     Returns user-like payload dict when valid, otherwise None.
     """
+    started_at = time.perf_counter()
     if not settings.NUTRITION_API_URL:
         return None
 
     base_url = settings.NUTRITION_API_URL.rstrip("/")
-    auth_me_path = settings.NUTRITION_AUTH_ME_PATH.strip() or "/v1/auth/me"
+    auth_me_path = settings.NUTRITION_AUTH_ME_PATH.strip() or "/v1/auth/introspect"
     if not auth_me_path.startswith("/"):
         auth_me_path = f"/{auth_me_path}"
 
@@ -205,8 +210,20 @@ def introspect_nutrition_token(token: str) -> Optional[dict[str, Any]]:
             timeout=settings.NUTRITION_AUTH_TIMEOUT_SECONDS,
         )
     except requests.RequestException as exc:
+        logger.info(
+            "[auth.introspection.remote] path=%s status=error total=%.2fms",
+            auth_me_path,
+            elapsed_ms(started_at),
+        )
         logger.info("auth_introspection_failed reason=request_exception error_type=%s", exc.__class__.__name__)
         return None
+
+    logger.info(
+        "[auth.introspection.remote] path=%s status=%s total=%.2fms",
+        auth_me_path,
+        response.status_code,
+        elapsed_ms(started_at),
+    )
 
     if response.status_code != 200:
         logger.info("auth_introspection_failed reason=status_code status=%s", response.status_code)
@@ -235,15 +252,40 @@ def introspect_nutrition_token(token: str) -> Optional[dict[str, Any]]:
 def introspect_nutrition_token_cached(token: str) -> Optional[dict[str, Any]]:
     """
     Cached token introspection.
-    Uses short in-memory cache keyed by token hash to reduce remote auth latency.
+    Uses cache + remote introspection endpoint to reduce auth latency.
     """
+    started_at = time.perf_counter()
+    cache_lookup_started_at = time.perf_counter()
     cached_payload = _get_cached_introspection(token)
+    cache_lookup_ms = elapsed_ms(cache_lookup_started_at)
     if cached_payload is not None:
+        logger.info(
+            "[auth.introspection] cache_lookup=%.2fms remote=0.00ms cache_store=0.00ms total=%.2fms",
+            cache_lookup_ms,
+            elapsed_ms(started_at),
+        )
         return cached_payload
 
+    remote_started_at = time.perf_counter()
     payload = introspect_nutrition_token(token)
+    remote_ms = elapsed_ms(remote_started_at)
     if payload is None:
+        logger.info(
+            "[auth.introspection] cache_lookup=%.2fms remote=%.2fms cache_store=0.00ms total=%.2fms",
+            cache_lookup_ms,
+            remote_ms,
+            elapsed_ms(started_at),
+        )
         return None
 
+    cache_store_started_at = time.perf_counter()
     _set_cached_introspection(token, payload)
+    cache_store_ms = elapsed_ms(cache_store_started_at)
+    logger.info(
+        "[auth.introspection] cache_lookup=%.2fms remote=%.2fms cache_store=%.2fms total=%.2fms",
+        cache_lookup_ms,
+        remote_ms,
+        cache_store_ms,
+        elapsed_ms(started_at),
+    )
     return payload
