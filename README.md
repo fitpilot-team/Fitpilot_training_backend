@@ -23,11 +23,11 @@ docker compose --env-file .env.fit-pilot10 -f docker-compose.yml up -d --build t
 ### Dependencia de auth contra Nutrition
 
 En modo integracion local:
-- `NUTRITION_API_URL=http://nutrition-backend:3000`
-- `NUTRITION_AUTH_ME_PATH=/v1/auth/introspect`
+- `NUTRITION_JWT_SECRETS=<JWT_SECRET de Nutrition>[,<anterior>]`
+- `NUTRITION_JWT_ALGORITHM=HS256`
 - `REDIS_URL=redis://app:<password-url-encoded>@fitpilot-redis:6379/0`
 
-El backend de training valida JWT emitidos por nutrition usando ese endpoint interno.
+El backend de training valida localmente los JWT emitidos por nutrition usando el mismo secret de firma del access token.
 
 Para stack compartido por multiples compose projects, crea la red externa:
 
@@ -66,9 +66,17 @@ The only supported frontend codebase is:
 ## Auth compatibility (Nutrition -> Training)
 
 Training endpoints accept:
-- Nutrition JWT via `NUTRITION_API_URL + NUTRITION_AUTH_ME_PATH` (`/v1/auth/introspect` by default)
+- Nutrition JWT validated locally via `NUTRITION_JWT_SECRETS`
+- `NUTRITION_JWT_SECRETS` accepts rotacion sin downtime en formato `nuevo,anterior`
+- `NUTRITION_JWT_SECRETS` must contain the same access-token signing secret configured in Nutrition as `JWT_SECRET`
 
 `/api/auth/login` is intentionally deprecated for operational use. Authenticate against Nutrition API and reuse that Bearer token for Training API.
+
+Recommended rotation flow:
+- deploy Training with `NUTRITION_JWT_SECRETS=nuevo,anterior`
+- deploy Nutrition signing new access tokens with `JWT_SECRET=nuevo`
+- wait longer than `JWT_ACCESS_EXPIRES_IN` (`15m` by default)
+- remove the previous secret from `NUTRITION_JWT_SECRETS`
 
 Role mapping used for authorization:
 - `ADMIN` / `admin` -> `admin`
@@ -121,4 +129,3 @@ The script nulls legacy local image URLs for:
 - `profile_picture`
 
 No local image compatibility remains enabled after this cleanup.
-

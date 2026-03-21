@@ -41,10 +41,8 @@ class Settings(BaseSettings):
     MOBILE_SCHEME: str = "fitpilot://"
 
     # Cross-service auth compatibility (Nutrition -> Training)
-    NUTRITION_API_URL: Optional[str] = None
-    NUTRITION_AUTH_ME_PATH: str = "/v1/auth/introspect"
-    NUTRITION_AUTH_TIMEOUT_SECONDS: int = 8
-    NUTRITION_AUTH_CACHE_TTL_SECONDS: int = 25
+    NUTRITION_JWT_SECRETS: str
+    NUTRITION_JWT_ALGORITHM: str = "HS256"
 
     # Exercise media storage (R2 only)
     R2_ENDPOINT: Optional[str] = None
@@ -68,6 +66,17 @@ class Settings(BaseSettings):
     @classmethod
     def database_url_must_be_remote(cls, value: str) -> str:
         return validate_remote_database_url(value)
+
+    @field_validator("NUTRITION_JWT_SECRETS")
+    @classmethod
+    def nutrition_jwt_secrets_must_be_present(cls, value: str) -> str:
+        normalized = str(value or "").strip()
+        secrets = [item.strip() for item in normalized.split(",") if item.strip()]
+        if not secrets:
+            raise ValueError(
+                "NUTRITION_JWT_SECRETS is required and must contain at least one JWT secret.",
+            )
+        return normalized
 
     model_config = SettingsConfigDict(
         env_file=".env",

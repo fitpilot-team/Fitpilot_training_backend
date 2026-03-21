@@ -7,8 +7,11 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from core.config import settings
-from core.security import introspect_nutrition_token_cached, normalize_auth_role
+from core.security import (
+    get_nutrition_jwt_secrets,
+    normalize_auth_role,
+    verify_nutrition_access_token_locally,
+)
 from core.timing import elapsed_ms, format_timing_fields
 from models.base import get_db
 from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay
@@ -30,7 +33,7 @@ class TrainingAccessContext:
 
 
 def _extract_identity(payload: dict | None) -> tuple[str | None, str | None, str | None]:
-    """Extract (user_id, email, role) from either local JWT or Nutrition introspection payloads."""
+    """Extract (user_id, email, role) from a validated Nutrition JWT payload."""
     if not payload:
         return None, None, None
 
@@ -216,7 +219,7 @@ def _has_trainer_professional_role(user: User) -> bool:
 def get_effective_user_role(user: User) -> str:
     """
     Resolve role for authorization checks.
-    Prefers role coming from auth token introspection when present.
+    Prefers role coming from the validated auth token when present.
     """
     external_role = normalize_auth_role(getattr(user, "_effective_auth_role", None))
     if external_role:
@@ -387,9 +390,9 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """Get the current authenticated user through Nutrition token introspection."""
+    """Get the current authenticated user through Nutrition JWT validation."""
     started_at = perf_counter()
-    introspection_ms = 0.0
+    jwt_local_ms = 0.0
     resolve_user_ms = 0.0
     active_check_ms = 0.0
     attach_ms = 0.0
@@ -401,17 +404,16 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-        if not settings.NUTRITION_API_URL:
+        token = credentials.credentials
+        if not get_nutrition_jwt_secrets():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="NUTRITION_API_URL is required for training auth",
+                detail="NUTRITION_JWT_SECRETS is required for training auth",
             )
 
-        token = credentials.credentials
-
-        introspection_started_at = perf_counter()
-        nutrition_payload = introspect_nutrition_token_cached(token)
-        introspection_ms = elapsed_ms(introspection_started_at)
+        jwt_local_started_at = perf_counter()
+        nutrition_payload = verify_nutrition_access_token_locally(token)
+        jwt_local_ms = elapsed_ms(jwt_local_started_at)
         if nutrition_payload is None:
             raise credentials_exception
 
@@ -448,7 +450,7 @@ def get_current_user(
                 "[auth.get_current_user] %s",
                 format_timing_fields(
                     {
-                        "introspect": introspection_ms,
+                        "jwt_local": jwt_local_ms,
                         "resolve_user": resolve_user_ms,
                         "active_check": active_check_ms,
                         "attach": attach_ms,

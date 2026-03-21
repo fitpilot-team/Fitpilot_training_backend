@@ -43,6 +43,9 @@ coverage/
 .cache/
 __pycache__/
 *.pyc
+venv/
+.venv/
+env/
 
 # TypeScript
 *.tsbuildinfo
