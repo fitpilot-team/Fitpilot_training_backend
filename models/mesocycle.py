@@ -8,9 +8,12 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
+    SmallInteger,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -148,12 +151,34 @@ class Microcycle(Base):
 
 class TrainingDay(Base):
     __tablename__ = "training_days"
-    __table_args__ = {"schema": "training"}
+    __table_args__ = (
+        UniqueConstraint(
+            "microcycle_id",
+            "day_number",
+            "session_index",
+            name="uq_training_days_microcycle_day_session",
+        ),
+        UniqueConstraint(
+            "microcycle_id",
+            "date",
+            "session_index",
+            name="uq_training_days_microcycle_date_session",
+        ),
+        Index(
+            "idx_training_days_microcycle_day_session",
+            "microcycle_id",
+            "day_number",
+            "session_index",
+        ),
+        {"schema": "training"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     microcycle_id = Column(Integer, ForeignKey("training.microcycles.id"), nullable=False)
     day_number = Column(Integer, nullable=False)
     date = Column(Date, nullable=False)
+    session_index = Column(SmallInteger, nullable=False, default=1)
+    session_label = Column(String(80), nullable=True)
     name = Column(String, nullable=False)
     focus = Column(String, nullable=True)
     rest_day = Column("is_rest_day", Boolean, default=False, nullable=False)
@@ -163,6 +188,7 @@ class TrainingDay(Base):
 
     microcycle = relationship("Microcycle", back_populates="training_days")
     exercises = relationship("DayExercise", back_populates="training_day", cascade="all, delete-orphan")
+    workout_logs = relationship("WorkoutLog", back_populates="training_day")
 
     def __repr__(self):
         return f"<TrainingDay {self.name} on {self.date}>"

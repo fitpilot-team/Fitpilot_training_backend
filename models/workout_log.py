@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import BigInteger, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import relationship
 
 from models.base import Base
@@ -23,13 +23,24 @@ class AbandonReason(str, enum.Enum):
 
 class WorkoutLog(Base):
     __tablename__ = "workout_logs"
-    __table_args__ = {"schema": "training"}
+    __table_args__ = (
+        Index(
+            "uq_workout_logs_authoritative_client_training_day",
+            "client_id",
+            "training_day_id",
+            unique=True,
+            postgresql_where=text("is_authoritative = TRUE"),
+        ),
+        {"schema": "training"},
+    )
 
     id = Column(BigInteger, primary_key=True)
     client_id = Column(Integer, ForeignKey("public.users.id"), nullable=False, index=True)
     training_day_id = Column(Integer, ForeignKey("training.training_days.id"), nullable=True, index=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    performed_on_date = Column(Date, nullable=False, index=True)
+    is_authoritative = Column(Boolean, nullable=False, default=True)
     status = Column(
         Enum(
             WorkoutStatus,
@@ -42,7 +53,7 @@ class WorkoutLog(Base):
     notes = Column(Text, nullable=True)
 
     client = relationship("User", foreign_keys=[client_id])
-    training_day = relationship("TrainingDay", foreign_keys=[training_day_id])
+    training_day = relationship("TrainingDay", foreign_keys=[training_day_id], back_populates="workout_logs")
     exercise_sets = relationship("ExerciseSetLog", back_populates="workout_log", cascade="all, delete-orphan")
 
     def __repr__(self):

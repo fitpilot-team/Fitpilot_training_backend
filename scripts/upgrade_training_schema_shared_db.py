@@ -344,6 +344,8 @@ DDL_STATEMENTS: list[str] = [
     """
     ALTER TABLE training.training_days
         ADD COLUMN IF NOT EXISTS date DATE,
+        ADD COLUMN IF NOT EXISTS session_index SMALLINT DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS session_label VARCHAR(80),
         ADD COLUMN IF NOT EXISTS focus VARCHAR(200),
         ADD COLUMN IF NOT EXISTS notes TEXT,
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -356,15 +358,95 @@ DDL_STATEMENTS: list[str] = [
     )
     UPDATE training.training_days td
        SET day_number = COALESCE(td.day_number, r.rn),
+           session_index = COALESCE(td.session_index, 1),
            name = COALESCE(NULLIF(td.name, ''), 'Day ' || COALESCE(td.day_number, r.rn)::text),
            date = COALESCE(td.date, mi.start_date + ((COALESCE(td.day_number, r.rn) - 1) * INTERVAL '1 day')),
            is_rest_day = COALESCE(td.is_rest_day, false),
            created_at = COALESCE(td.created_at, CURRENT_TIMESTAMP),
            updated_at = COALESCE(td.updated_at, CURRENT_TIMESTAMP)
       FROM ranked r
-      JOIN training.microcycles mi ON mi.id = r.microcycle_id
+     JOIN training.microcycles mi ON mi.id = r.microcycle_id
      WHERE td.id = r.id;
     """,
+    "ALTER TABLE training.training_days ALTER COLUMN session_index SET DEFAULT 1;",
+    "UPDATE training.training_days SET session_index = 1 WHERE session_index IS NULL;",
+    "ALTER TABLE training.training_days ALTER COLUMN session_index SET NOT NULL;",
+    """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'uq_training_days_microcycle_day_session'
+              AND connamespace = 'training'::regnamespace
+        ) THEN
+            ALTER TABLE training.training_days
+                ADD CONSTRAINT uq_training_days_microcycle_day_session
+                UNIQUE (microcycle_id, day_number, session_index);
+        END IF;
+    END $$;
+    """,
+    """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'uq_training_days_microcycle_date_session'
+              AND connamespace = 'training'::regnamespace
+        ) THEN
+            ALTER TABLE training.training_days
+                ADD CONSTRAINT uq_training_days_microcycle_date_session
+                UNIQUE (microcycle_id, date, session_index);
+        END IF;
+    END $$;
+    """,
+    """
+    ALTER TABLE training.workout_logs
+        ADD COLUMN IF NOT EXISTS performed_on_date DATE,
+        ADD COLUMN IF NOT EXISTS is_authoritative BOOLEAN DEFAULT TRUE;
+    """,
+    """
+    UPDATE training.workout_logs wl
+       SET performed_on_date = COALESCE(
+               wl.performed_on_date,
+               CAST(wl.started_at AS DATE),
+               td.date,
+               CURRENT_DATE
+           )
+      FROM training.training_days td
+     WHERE td.id = wl.training_day_id
+       AND wl.performed_on_date IS NULL;
+    """,
+    "UPDATE training.workout_logs SET performed_on_date = CURRENT_DATE WHERE performed_on_date IS NULL;",
+    "UPDATE training.workout_logs SET is_authoritative = TRUE WHERE is_authoritative IS NULL;",
+    """
+    WITH ranked AS (
+        SELECT
+            wl.id,
+            ROW_NUMBER() OVER (
+                PARTITION BY wl.client_id, wl.training_day_id
+                ORDER BY
+                    CASE
+                        WHEN wl.status = 'completed' THEN 0
+                        WHEN wl.status = 'in_progress' THEN 1
+                        WHEN wl.status = 'abandoned' THEN 2
+                        ELSE 3
+                    END,
+                    COALESCE(wl.completed_at, wl.started_at, CURRENT_TIMESTAMP) DESC,
+                    wl.id DESC
+            ) AS rn
+        FROM training.workout_logs wl
+        WHERE wl.training_day_id IS NOT NULL
+    )
+    UPDATE training.workout_logs wl
+       SET is_authoritative = CASE WHEN ranked.rn = 1 THEN TRUE ELSE FALSE END
+      FROM ranked
+     WHERE wl.id = ranked.id;
+    """,
+    "ALTER TABLE training.workout_logs ALTER COLUMN performed_on_date SET NOT NULL;",
+    "ALTER TABLE training.workout_logs ALTER COLUMN is_authoritative SET DEFAULT TRUE;",
+    "ALTER TABLE training.workout_logs ALTER COLUMN is_authoritative SET NOT NULL;",
     """
     ALTER TABLE training.day_exercises
         ADD COLUMN IF NOT EXISTS effort_type VARCHAR(20),
@@ -437,33 +519,76 @@ DDL_STATEMENTS: list[str] = [
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITHOUT TIME ZONE;
     """,
     """
-    UPDATE training.client_interviews
-       SET days_per_week = COALESCE(days_per_week, days_available),
-           available_equipment = COALESCE(available_equipment, equipment_available),
-           injury_details = COALESCE(NULLIF(injury_details, ''), NULLIF(injuries, '')),
-           injury_areas = COALESCE(
-               injury_areas,
-               CASE
-                   WHEN NULLIF(injuries, '') IS NOT NULL THEN ARRAY['other']::text[]
-                   ELSE injury_areas
-               END
-           ),
-           exercise_variety = COALESCE(NULLIF(LOWER(exercise_variety), ''), 'medium'),
-           include_cardio = COALESCE(include_cardio, false),
-           include_warmup = COALESCE(include_warmup, true),
-           include_cooldown = COALESCE(include_cooldown, false),
-           created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
-           updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP),
-           experience_level = COALESCE(NULLIF(LOWER(experience_level), ''), experience_level),
-           primary_goal = COALESCE(NULLIF(LOWER(primary_goal), ''), primary_goal),
-           gender = COALESCE(NULLIF(LOWER(gender), ''), gender);
+    DO $$
+    DECLARE
+        has_days_available BOOLEAN;
+        has_equipment_available BOOLEAN;
+        has_injuries BOOLEAN;
+        days_expr TEXT;
+        equipment_expr TEXT;
+        injuries_expr TEXT;
+    BEGIN
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'training'
+              AND table_name = 'client_interviews'
+              AND column_name = 'days_available'
+        ) INTO has_days_available;
+
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'training'
+              AND table_name = 'client_interviews'
+              AND column_name = 'equipment_available'
+        ) INTO has_equipment_available;
+
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'training'
+              AND table_name = 'client_interviews'
+              AND column_name = 'injuries'
+        ) INTO has_injuries;
+
+        days_expr := CASE WHEN has_days_available THEN 'days_available' ELSE 'NULL' END;
+        equipment_expr := CASE WHEN has_equipment_available THEN 'equipment_available' ELSE 'NULL' END;
+        injuries_expr := CASE WHEN has_injuries THEN 'NULLIF(injuries, '''')' ELSE 'NULL' END;
+
+        EXECUTE '
+            UPDATE training.client_interviews
+               SET days_per_week = COALESCE(days_per_week, ' || days_expr || '),
+                   available_equipment = COALESCE(available_equipment, ' || equipment_expr || '),
+                   injury_details = COALESCE(NULLIF(injury_details, ''''), ' || injuries_expr || '),
+                   injury_areas = COALESCE(
+                       injury_areas,
+                       CASE
+                           WHEN ' || injuries_expr || ' IS NOT NULL THEN ARRAY[''other'']::text[]
+                           ELSE injury_areas
+                       END
+                   ),
+                   exercise_variety = COALESCE(NULLIF(LOWER(exercise_variety), ''''), ''medium''),
+                   include_cardio = COALESCE(include_cardio, false),
+                   include_warmup = COALESCE(include_warmup, true),
+                   include_cooldown = COALESCE(include_cooldown, false),
+                   created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+                   updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP),
+                   experience_level = COALESCE(NULLIF(LOWER(experience_level), ''''), experience_level),
+                   primary_goal = COALESCE(NULLIF(LOWER(primary_goal), ''''), primary_goal),
+                   gender = COALESCE(NULLIF(LOWER(gender), ''''), gender)
+        ';
+    END $$;
     """,
     "CREATE INDEX IF NOT EXISTS idx_training_client_interviews_client_id ON training.client_interviews (client_id);",
     "CREATE INDEX IF NOT EXISTS idx_training_macrocycles_trainer_client_status ON training.macrocycles (trainer_id, client_id, status);",
     "CREATE INDEX IF NOT EXISTS idx_training_mesocycles_macrocycle_block ON training.mesocycles (macrocycle_id, block_number);",
     "CREATE INDEX IF NOT EXISTS idx_training_microcycles_mesocycle_week ON training.microcycles (mesocycle_id, week_number);",
     "CREATE INDEX IF NOT EXISTS idx_training_days_microcycle_day ON training.training_days (microcycle_id, day_number);",
+    "CREATE INDEX IF NOT EXISTS idx_training_days_microcycle_day_session ON training.training_days (microcycle_id, day_number, session_index);",
     "CREATE INDEX IF NOT EXISTS idx_training_day_exercises_day_order ON training.day_exercises (training_day_id, order_index);",
+    "CREATE INDEX IF NOT EXISTS idx_training_workout_logs_performed_on_date ON training.workout_logs (performed_on_date);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_workout_logs_authoritative_client_training_day ON training.workout_logs (client_id, training_day_id) WHERE is_authoritative = TRUE;",
 ]
 
 ID_DEFAULT_TABLES = [

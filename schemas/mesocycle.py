@@ -107,8 +107,10 @@ class DayExerciseResponse(DayExerciseBase):
 # =============== TrainingDay Schemas ===============
 
 class TrainingDayBase(BaseModel):
-    day_number: int = Field(ge=1, le=14, description="Day number within the microcycle (1-14 for extended microcycles)")
+    day_number: int = Field(ge=1, description="Ordinal day number within the microcycle")
     date: date
+    session_index: int = Field(ge=1, description="Session ordinal within the same date/day")
+    session_label: Optional[str] = Field(None, max_length=80, description="Optional session label such as AM/PM")
     name: str = Field(min_length=1, max_length=200)
     focus: Optional[str] = Field(None, max_length=200, description="Training focus (e.g., 'Chest & Triceps')")
     rest_day: bool = False
@@ -120,8 +122,10 @@ class TrainingDayCreate(TrainingDayBase):
 
 
 class TrainingDayUpdate(BaseModel):
-    day_number: Optional[int] = Field(None, ge=1, le=7)
+    day_number: Optional[int] = Field(None, ge=1)
     date: Optional[date] = None
+    session_index: Optional[int] = Field(None, ge=1)
+    session_label: Optional[str] = Field(None, max_length=80)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     focus: Optional[str] = Field(None, max_length=200)
     rest_day: Optional[bool] = None

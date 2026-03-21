@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime, date
 from typing import Optional, List, Literal
 from models.workout_log import WorkoutStatus, AbandonReason
+from schemas.mesocycle import TrainingDayResponse
 
 
 def _stringify_id(value: object) -> str | None:
@@ -71,6 +72,8 @@ class WorkoutLogResponse(WorkoutLogBase):
     client_id: str
     started_at: datetime
     completed_at: Optional[datetime]
+    performed_on_date: date
+    is_authoritative: bool
     status: WorkoutStatus
     # Campos de abandono
     abandon_reason: Optional[AbandonReason] = None
@@ -133,6 +136,7 @@ class ExerciseProgress(BaseModel):
 class CurrentWorkoutState(BaseModel):
     """Estado actual de un workout en progreso"""
     workout_log: WorkoutLogResponse
+    training_day: TrainingDayResponse
     training_day_name: str
     training_day_focus: Optional[str]
     total_exercises: int
@@ -145,12 +149,16 @@ class CurrentWorkoutState(BaseModel):
 class NextWorkoutTrainingDay(BaseModel):
     """Training day simplificado para NextWorkoutResponse"""
     id: str
+    microcycle_id: str
+    date: date
+    session_index: int
+    session_label: Optional[str] = None
     name: str
     focus: Optional[str] = None
     day_number: int
     rest_day: bool = False
 
-    @field_validator("id", mode="before")
+    @field_validator("id", "microcycle_id", mode="before")
     @classmethod
     def serialize_id(cls, value: object) -> str | None:
         return _stringify_id(value)
@@ -168,6 +176,66 @@ class NextWorkoutResponse(BaseModel):
     position: Optional[int] = None  # Posición actual (ej: 5 de 24)
     total: Optional[int] = None  # Total de entrenamientos en el programa
     all_completed: bool = False  # True si el cliente completó todo el programa
+
+
+class WorkoutSetLogUpdate(BaseModel):
+    reps_completed: Optional[int] = Field(None, ge=0, le=100)
+    weight_kg: Optional[float] = Field(None, ge=0, le=1000)
+    effort_value: Optional[float] = Field(None, ge=0, le=10)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+PlannedSessionStatus = Literal["pending", "partial", "completed", "rest"]
+ActualSessionStatus = Literal["not_started", "in_progress", "completed", "abandoned"]
+
+
+class MicrocycleSessionProgress(BaseModel):
+    training_day_id: str
+    workout_log_id: Optional[str] = None
+    session_index: int
+    session_label: Optional[str] = None
+    name: str
+    focus: Optional[str] = None
+    planned_status: PlannedSessionStatus
+    actual_status: ActualSessionStatus
+    completion_percentage: float = 0.0
+    performed_on_date: Optional[date] = None
+
+
+class MicrocycleDayProgress(BaseModel):
+    date: date
+    day_number: Optional[int] = None
+    planned_sessions: int = 0
+    completed_planned_sessions: int = 0
+    actual_logs_count: int = 0
+    has_partial_session: bool = False
+    is_rest_day: bool = False
+    is_planned_date: bool = True
+    sessions: List[MicrocycleSessionProgress] = []
+
+
+class PlannedMicrocycleMetrics(BaseModel):
+    total_planned_sessions: int = 0
+    completed_planned_sessions: int = 0
+    next_session_position: Optional[int] = None
+    completion_percentage: float = 0.0
+
+
+class ActualMicrocycleMetrics(BaseModel):
+    executed_sessions: int = 0
+    active_days: int = 0
+    double_session_days: int = 0
+
+
+class MicrocycleProgressResponse(BaseModel):
+    microcycle_id: Optional[str] = None
+    microcycle_name: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    planned_metrics: PlannedMicrocycleMetrics
+    actual_metrics: ActualMicrocycleMetrics
+    days: List[MicrocycleDayProgress]
 
 
 # =============== Missed Workouts (Entrenamientos Perdidos) ===============
