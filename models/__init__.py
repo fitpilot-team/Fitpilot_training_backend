@@ -15,6 +15,7 @@ from models.mesocycle import (
 )
 from models.client_interview import ClientInterview, Gender, ExperienceLevel
 from models.client_metric import ClientMetric, MetricType
+from models.workout_analytics import ClientWorkoutAnalyticsPreference
 from models.workout_log import WorkoutLog, ExerciseSetLog, WorkoutStatus
 from models.patient_context import PatientContextSnapshot
 
@@ -46,6 +47,7 @@ __all__ = [
     "ExperienceLevel",
     "ClientMetric",
     "MetricType",
+    "ClientWorkoutAnalyticsPreference",
     "WorkoutLog",
     "ExerciseSetLog",
     "WorkoutStatus",

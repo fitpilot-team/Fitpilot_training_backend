@@ -16,6 +16,7 @@ from api.routers import (
     muscles,
     training_days,
     translation,
+    workout_analytics,
     workout_logs,
 )
 
@@ -60,6 +61,7 @@ app.include_router(translation.router, prefix="/api/translation", tags=["Transla
 
 # Workout Logs (Mobile App)
 app.include_router(workout_logs.router, prefix="/api/workout-logs", tags=["Workout Logs"])
+app.include_router(workout_analytics.router, prefix="/api/workout-analytics", tags=["Workout Analytics"])
 
 
 @app.get("/")

@@ -589,6 +589,21 @@ DDL_STATEMENTS: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_training_day_exercises_day_order ON training.day_exercises (training_day_id, order_index);",
     "CREATE INDEX IF NOT EXISTS idx_training_workout_logs_performed_on_date ON training.workout_logs (performed_on_date);",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_workout_logs_authoritative_client_training_day ON training.workout_logs (client_id, training_day_id) WHERE is_authoritative = TRUE;",
+    """
+    CREATE TABLE IF NOT EXISTS training.client_workout_analytics_preferences (
+        client_id INTEGER PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+        rep_ranges JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
+    """
+    UPDATE training.client_workout_analytics_preferences
+       SET rep_ranges = COALESCE(NULLIF(rep_ranges, 'null'::jsonb), '[]'::jsonb),
+           created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+           updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP);
+    """,
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_training_client_workout_analytics_preferences_client_id ON training.client_workout_analytics_preferences (client_id);",
 ]
 
 ID_DEFAULT_TABLES = [
