@@ -22,16 +22,22 @@ _redis_disabled_until_epoch = 0.0
 
 def _mark_redis_unavailable(exc: Exception) -> None:
     global _redis_client, _redis_disabled_until_epoch
+    now_epoch = time.time()
+    should_log = now_epoch >= _redis_disabled_until_epoch
     _redis_client = None
-    _redis_disabled_until_epoch = time.time() + _REDIS_ERROR_COOLDOWN_SECONDS
-    logger.warning("redis_cache_unavailable error_type=%s", exc.__class__.__name__)
+    _redis_disabled_until_epoch = now_epoch + _REDIS_ERROR_COOLDOWN_SECONDS
+    if should_log:
+        logger.warning("redis_cache_unavailable error_type=%s", exc.__class__.__name__)
+
+
+def is_temporarily_unavailable() -> bool:
+    return time.time() < _redis_disabled_until_epoch
 
 
 def _get_client() -> Optional[redis.Redis]:
     global _redis_client
 
-    now_epoch = time.time()
-    if now_epoch < _redis_disabled_until_epoch:
+    if is_temporarily_unavailable():
         return None
 
     with _redis_lock:
@@ -44,7 +50,7 @@ def _get_client() -> Optional[redis.Redis]:
                 decode_responses=True,
                 socket_connect_timeout=_REDIS_CONNECT_TIMEOUT_SECONDS,
                 socket_timeout=_REDIS_SOCKET_TIMEOUT_SECONDS,
-                retry_on_timeout=True,
+                retry_on_timeout=False,
                 health_check_interval=30,
             )
         except (ValueError, RedisError) as exc:
