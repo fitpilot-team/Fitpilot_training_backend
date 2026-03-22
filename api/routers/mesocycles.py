@@ -1,14 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import logging
+from time import perf_counter
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased, joinedload
-from typing import Optional
 from models.base import get_db
 from models.user import User
 from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay, DayExercise, MesocycleStatus
 from models.exercise import Exercise
 from models.exercise_muscle import ExerciseMuscle
+from core.timing import elapsed_ms, format_timing_fields
 from schemas.mesocycle import (
-    MacrocycleCreate, MacrocycleUpdate, MacrocycleResponse, MacrocycleListResponse,
+    MacrocycleCreate, MacrocycleUpdate, MacrocycleResponse, MacrocycleListItemResponse, MacrocycleListResponse,
     MacrocyclePaletteResult,
     MesocycleCreate, MesocycleUpdate, MesocycleResponse, MesocycleListResponse,
     MicrocycleCreate, MicrocycleUpdate, MicrocycleResponse,
@@ -22,6 +26,7 @@ from core.dependencies import (
     get_effective_user_role,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -65,6 +70,7 @@ def _build_macrocycle_palette_result(macrocycle: Macrocycle) -> MacrocyclePalett
 
 @router.get("", response_model=MacrocycleListResponse)
 def list_macrocycles(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: int = Query(0, ge=0),
@@ -73,47 +79,134 @@ def list_macrocycles(
     client_id: Optional[int] = None
 ):
     """
-    Get list of macrocycles
+    Get lightweight list of macrocycles
 
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
     - **status**: Filter by status (draft/active/completed/archived)
     - **client_id**: Filter by client (trainers only)
     """
-    query = db.query(Macrocycle)
+    request_started_at = getattr(request.state, "request_started_at", None)
+    route_started_at = perf_counter()
+    request.state.router_started_at = route_started_at
 
-    role = get_effective_user_role(current_user)
-    if role in {"trainer", "admin"}:
-        assert_training_professional_access(current_user)
+    auth_ms = elapsed_ms(request_started_at, route_started_at) if request_started_at is not None else 0.0
+    init_ms = 0.0
+    filters_ms = 0.0
+    count_ms = 0.0
+    fetch_ms = 0.0
+    serialize_ms = 0.0
 
-    # Filter based on user role
-    if role == "client":
-        # Clients can only see their own macrocycles
-        query = query.filter(Macrocycle.client_id == current_user.id)
-    elif client_id:
-        # Trainers/Admins can filter by client_id
-        query = query.filter(Macrocycle.client_id == client_id)
-    elif role == "admin":
-        # Admins see all macrocycles (both templates and client programs)
-        pass  # No filter applied
-    else:
-        # Trainers see only macrocycles they created
-        query = query.filter(Macrocycle.trainer_id == current_user.id)
+    try:
+        init_started_at = perf_counter()
+        query = db.query(Macrocycle)
+        role = get_effective_user_role(current_user)
+        init_ms = elapsed_ms(init_started_at)
 
-    # Apply status filter
-    if status:
-        query = query.filter(Macrocycle.status == status)
+        auth_started_at = perf_counter()
+        if role in {"trainer", "admin"}:
+            assert_training_professional_access(current_user)
+        auth_ms += elapsed_ms(auth_started_at)
 
-    # Get total count
-    total = query.count()
+        filters_started_at = perf_counter()
+        # Filter based on user role
+        if role == "client":
+            # Clients can only see their own macrocycles
+            query = query.filter(Macrocycle.client_id == current_user.id)
+        elif client_id:
+            # Trainers/Admins can filter by client_id
+            query = query.filter(Macrocycle.client_id == client_id)
+        elif role == "admin":
+            # Admins see all macrocycles (both templates and client programs)
+            pass  # No filter applied
+        else:
+            # Trainers see only macrocycles they created
+            query = query.filter(Macrocycle.trainer_id == current_user.id)
 
-    # Apply pagination and order
-    macrocycles = query.order_by(Macrocycle.created_at.desc()).offset(skip).limit(limit).all()
+        # Apply status filter
+        if status:
+            query = query.filter(Macrocycle.status == status)
+        filters_ms = elapsed_ms(filters_started_at)
 
-    return {
-        "total": total,
-        "macrocycles": macrocycles
-    }
+        count_started_at = perf_counter()
+        total = query.count()
+        count_ms = elapsed_ms(count_started_at)
+
+        fetch_started_at = perf_counter()
+        mesocycle_counts = (
+            db.query(
+                Mesocycle.macrocycle_id.label("macrocycle_id"),
+                func.count(Mesocycle.id).label("mesocycles_count"),
+            )
+            .group_by(Mesocycle.macrocycle_id)
+            .subquery()
+        )
+
+        rows = (
+            query.outerjoin(mesocycle_counts, mesocycle_counts.c.macrocycle_id == Macrocycle.id)
+            .with_entities(
+                Macrocycle.id,
+                Macrocycle.name,
+                Macrocycle.description,
+                Macrocycle.objective,
+                Macrocycle.start_date,
+                Macrocycle.end_date,
+                Macrocycle.client_id,
+                Macrocycle.trainer_id,
+                Macrocycle.status,
+                Macrocycle.created_at,
+                Macrocycle.updated_at,
+                func.coalesce(mesocycle_counts.c.mesocycles_count, 0).label("mesocycles_count"),
+            )
+            .order_by(Macrocycle.created_at.desc(), Macrocycle.id.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        fetch_ms = elapsed_ms(fetch_started_at)
+
+        serialize_started_at = perf_counter()
+        macrocycles = [
+            MacrocycleListItemResponse(
+                id=str(row.id),
+                name=row.name,
+                description=row.description,
+                objective=row.objective,
+                start_date=row.start_date,
+                end_date=row.end_date,
+                client_id=str(row.client_id) if row.client_id is not None else None,
+                trainer_id=str(row.trainer_id),
+                status=row.status,
+                mesocycles_count=int(row.mesocycles_count or 0),
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ]
+        serialize_ms = elapsed_ms(serialize_started_at)
+
+        return {
+            "total": total,
+            "macrocycles": macrocycles
+        }
+    finally:
+        route_completed_at = perf_counter()
+        request.state.router_completed_at = route_completed_at
+        total_started_at = request_started_at if request_started_at is not None else route_started_at
+        logger.info(
+            "[mesocycles] %s",
+            format_timing_fields(
+                {
+                    "init": init_ms,
+                    "auth": auth_ms,
+                    "filters": filters_ms,
+                    "count": count_ms,
+                    "fetch": fetch_ms,
+                    "serialize": serialize_ms,
+                    "total": elapsed_ms(total_started_at, route_completed_at),
+                }
+            ),
+        )
 
 
 @router.get("/palette-search", response_model=list[MacrocyclePaletteResult])

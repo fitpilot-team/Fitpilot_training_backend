@@ -1,9 +1,13 @@
-from fastapi import FastAPI
+import logging
+from time import perf_counter
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from core.config import settings
 from core.cors import LOCAL_LAN_ORIGIN_REGEX, resolve_allowed_origins
+from core.timing import elapsed_ms
 from api.routers import (
     ai_generator,
     auth,
@@ -19,6 +23,8 @@ from api.routers import (
     workout_analytics,
     workout_logs,
 )
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="FitPilot API",
@@ -36,6 +42,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_http_request_timing(request: Request, call_next):
+    request_started_at = perf_counter()
+    request.state.request_started_at = request_started_at
+    response = None
+
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        finished_at = perf_counter()
+        total_ms = elapsed_ms(request_started_at, finished_at)
+        status_code = response.status_code if response is not None else 500
+        route_started_at = getattr(request.state, "router_started_at", None)
+        route_completed_at = getattr(request.state, "router_completed_at", None)
+
+        extra = ""
+        if route_started_at is not None and route_completed_at is not None:
+            route_ms = elapsed_ms(route_started_at, route_completed_at)
+            finalize_ms = elapsed_ms(route_completed_at, finished_at)
+            extra = f" router={route_ms:.2f}ms finalize={finalize_ms:.2f}ms"
+
+        logger.info(
+            "[request] %s %s -> %s in %.2fms%s",
+            request.method,
+            request.url.path,
+            status_code,
+            total_ms,
+            extra,
+        )
 
 # Static video files configuration
 VIDEO_STATIC_DIR = Path(__file__).parent.parent / "static" / "videos"

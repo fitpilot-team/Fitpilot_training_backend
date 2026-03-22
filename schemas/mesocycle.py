@@ -292,9 +292,30 @@ class MacrocycleResponse(MacrocycleBase):
         return _normalize_updated_at(value, info)
 
 
+class MacrocycleListItemResponse(MacrocycleBase):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    id: str
+    status: MesocycleStatus
+    trainer_id: str
+    mesocycles_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def validate_created_at(cls, value: Optional[datetime]) -> datetime:
+        return _normalize_created_at(value)
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def validate_updated_at(cls, value: Optional[datetime], info: ValidationInfo) -> datetime:
+        return _normalize_updated_at(value, info)
+
+
 class MacrocycleListResponse(BaseModel):
     total: int
-    macrocycles: List[MacrocycleResponse]
+    macrocycles: List[MacrocycleListItemResponse]
 
 
 class MacrocyclePaletteResult(BaseModel):
