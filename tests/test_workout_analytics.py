@@ -36,8 +36,10 @@ if "redis.exceptions" not in sys.modules:
 from api.routers.workout_analytics import (  # noqa: E402
     RepRangeValidationError,
     build_dashboard_response,
+    build_recent_history,
     build_exercise_detail_series,
     default_rep_ranges,
+    filter_workout_logs_by_status,
     normalize_rep_ranges,
 )
 
@@ -207,3 +209,46 @@ def test_build_exercise_detail_series_tracks_personal_best_and_dominant_bucket()
     assert response.series[0].best_weight_kg == 82.5
     assert response.series[1].reps_bucket_id == "range_1"
     assert response.series[1].volume_kg == 1012.5
+
+
+def test_recent_history_supports_status_filter_and_pagination() -> None:
+    logs = [
+        make_log(
+            log_id=30,
+            performed_on=date(2026, 3, 20),
+            started_at=datetime(2026, 3, 20, 8, 0, 0),
+            completed_at=datetime(2026, 3, 20, 8, 30, 0),
+            status="completed",
+            training_day_name="Torso A",
+            exercises_count=2,
+            sets=[],
+        ),
+        make_log(
+            log_id=31,
+            performed_on=date(2026, 3, 18),
+            started_at=datetime(2026, 3, 18, 8, 0, 0),
+            completed_at=None,
+            status="in_progress",
+            training_day_name="Pierna B",
+            exercises_count=3,
+            sets=[],
+        ),
+        make_log(
+            log_id=32,
+            performed_on=date(2026, 3, 14),
+            started_at=datetime(2026, 3, 14, 8, 0, 0),
+            completed_at=datetime(2026, 3, 14, 8, 35, 0),
+            status="completed",
+            training_day_name="Empuje",
+            exercises_count=1,
+            sets=[],
+        ),
+    ]
+
+    completed_logs = filter_workout_logs_by_status(logs, "completed")
+    assert [log.id for log in completed_logs] == [30, 32]
+
+    paged_history = build_recent_history(completed_logs, skip=1, limit=1)
+    assert len(paged_history) == 1
+    assert paged_history[0].workout_log_id == "32"
+    assert paged_history[0].training_day_name == "Empuje"

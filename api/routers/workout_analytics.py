@@ -18,6 +18,8 @@ from schemas.workout_analytics import (
     ExerciseTrendDetailResponse,
     ExerciseTrendDetailSummaryResponse,
     ExerciseTrendPointResponse,
+    WorkoutAnalyticsHistoryPageResponse,
+    WorkoutAnalyticsHistoryStatusFilter,
     ExerciseTrendSummaryResponse,
     RecentWorkoutHistoryItemResponse,
     RepRangeBucketResponse,
@@ -41,6 +43,7 @@ DEFAULT_REP_RANGES: list[dict[str, Any]] = [
 ]
 RANGE_TO_WEEKS = {"4w": 4, "8w": 8, "12w": 12, "24w": 24}
 MAX_RECENT_HISTORY_ITEMS = 12
+DEFAULT_HISTORY_PAGE_SIZE = 20
 
 
 class RepRangeValidationError(ValueError):
@@ -199,6 +202,20 @@ def filter_logs_in_range(
     return [workout_log for workout_log in workout_logs if get_log_performed_date(workout_log) >= range_start]
 
 
+def filter_workout_logs_by_status(
+    workout_logs: Iterable[WorkoutLog | Any],
+    status_filter: WorkoutAnalyticsHistoryStatusFilter,
+) -> list[WorkoutLog | Any]:
+    if status_filter == "all":
+        return list(workout_logs)
+
+    return [
+        workout_log
+        for workout_log in workout_logs
+        if stringify_enum(getattr(workout_log, "status", "")) == status_filter
+    ]
+
+
 def calculate_duration_minutes(workout_log: WorkoutLog | Any) -> float | None:
     started_at = getattr(workout_log, "started_at", None)
     completed_at = getattr(workout_log, "completed_at", None)
@@ -303,10 +320,20 @@ def get_week_start(day_value: date) -> date:
     return day_value - timedelta(days=day_value.weekday())
 
 
-def build_recent_history(workout_logs: Sequence[WorkoutLog | Any]) -> list[RecentWorkoutHistoryItemResponse]:
+def build_recent_history(
+    workout_logs: Sequence[WorkoutLog | Any],
+    *,
+    skip: int = 0,
+    limit: int = MAX_RECENT_HISTORY_ITEMS,
+) -> list[RecentWorkoutHistoryItemResponse]:
     history_items: list[RecentWorkoutHistoryItemResponse] = []
+    normalized_skip = max(skip, 0)
+    normalized_limit = max(limit, 0)
 
-    for workout_log in list(workout_logs)[:MAX_RECENT_HISTORY_ITEMS]:
+    if normalized_limit == 0:
+        return history_items
+
+    for workout_log in list(workout_logs)[normalized_skip : normalized_skip + normalized_limit]:
         training_day = getattr(workout_log, "training_day", None)
         history_items.append(
             RecentWorkoutHistoryItemResponse(
@@ -658,6 +685,29 @@ def get_my_workout_analytics_dashboard(
         rep_ranges=preferences.rep_ranges,
         range_key=range,
         exercise_names=exercise_names,
+    )
+
+
+@router.get("/me/history", response_model=WorkoutAnalyticsHistoryPageResponse)
+def get_my_workout_analytics_history(
+    range: WorkoutAnalyticsRange = Query("12w"),
+    status_filter: WorkoutAnalyticsHistoryStatusFilter = Query("all", alias="status"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(DEFAULT_HISTORY_PAGE_SIZE, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workout_logs = fetch_client_workout_logs(db, current_user.id)
+    filtered_logs = filter_logs_in_range(workout_logs, resolve_range_start(range))
+    ordered_logs = sorted(
+        filtered_logs,
+        key=lambda workout_log: (get_log_performed_date(workout_log), getattr(workout_log, "id", 0)),
+        reverse=True,
+    )
+    status_logs = filter_workout_logs_by_status(ordered_logs, status_filter)
+    return WorkoutAnalyticsHistoryPageResponse(
+        total=len(status_logs),
+        items=build_recent_history(status_logs, skip=skip, limit=limit),
     )
 
 
