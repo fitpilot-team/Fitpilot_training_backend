@@ -13,6 +13,7 @@ def _stringify_id(value: object) -> str | None:
 
 
 WorkoutAnalyticsRange = Literal["4w", "8w", "12w", "24w", "all"]
+WorkoutAnalyticsHistoryStatusFilter = Literal["all", "in_progress", "completed", "abandoned"]
 RepRangeColorToken = Literal["navy", "sky", "emerald", "amber", "rose", "violet"]
 
 
@@ -86,6 +87,11 @@ class RecentWorkoutHistoryItemResponse(BaseModel):
     @classmethod
     def serialize_workout_log_id(cls, value: object) -> str | None:
         return _stringify_id(value)
+
+
+class WorkoutAnalyticsHistoryPageResponse(BaseModel):
+    total: int = 0
+    items: List[RecentWorkoutHistoryItemResponse] = Field(default_factory=list)
 
 
 class WorkoutAnalyticsDashboardResponse(BaseModel):
