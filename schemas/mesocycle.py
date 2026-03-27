@@ -292,6 +292,14 @@ class MacrocycleResponse(MacrocycleBase):
         return _normalize_updated_at(value, info)
 
 
+class MacrocycleActivationResponse(BaseModel):
+    macrocycle: MacrocycleResponse
+    effective_start_date: date
+    shifted_training_day_count: int
+    archived_macrocycle_ids: List[str]
+    completed_macrocycle_ids: List[str]
+
+
 class MacrocycleListItemResponse(MacrocycleBase):
     model_config = ConfigDict(coerce_numbers_to_str=True)
 
