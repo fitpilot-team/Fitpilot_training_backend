@@ -1,4 +1,5 @@
 import logging
+from datetime import date, timedelta
 from time import perf_counter
 from typing import Optional
 
@@ -13,6 +14,7 @@ from models.exercise_muscle import ExerciseMuscle
 from core.timing import elapsed_ms, format_timing_fields
 from schemas.mesocycle import (
     MacrocycleCreate, MacrocycleUpdate, MacrocycleResponse, MacrocycleListItemResponse, MacrocycleListResponse,
+    MacrocycleActivationResponse,
     MacrocyclePaletteResult,
     MesocycleCreate, MesocycleUpdate, MesocycleResponse, MesocycleListResponse,
     MicrocycleCreate, MicrocycleUpdate, MicrocycleResponse,
@@ -28,6 +30,10 @@ from core.dependencies import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _today() -> date:
+    return date.today()
 
 
 def _normalize_palette_query(q: str) -> str:
@@ -63,6 +69,63 @@ def _build_macrocycle_palette_result(macrocycle: Macrocycle) -> MacrocyclePalett
         status=str(_enum_value(macrocycle.status)),
         created_at=macrocycle.created_at,
         updated_at=macrocycle.updated_at,
+    )
+
+
+def _get_macrocycle_with_nested_data(db: Session, macrocycle_id: int) -> Optional[Macrocycle]:
+    return db.query(Macrocycle).options(
+        joinedload(Macrocycle.mesocycles)
+            .joinedload(Mesocycle.microcycles)
+            .joinedload(Microcycle.training_days)
+            .joinedload(TrainingDay.exercises)
+            .joinedload(DayExercise.exercise)
+            .joinedload(Exercise.exercise_muscles)
+            .joinedload(ExerciseMuscle.muscle)
+    ).filter(Macrocycle.id == macrocycle_id).first()
+
+
+def _shift_date(value: Optional[date], delta_days: int) -> Optional[date]:
+    if value is None or delta_days == 0:
+        return value
+    return value + timedelta(days=delta_days)
+
+
+def _shift_macrocycle_schedule(macrocycle: Macrocycle, delta_days: int) -> int:
+    shifted_training_day_count = 0
+
+    macrocycle.start_date = _shift_date(macrocycle.start_date, delta_days)
+    macrocycle.end_date = _shift_date(macrocycle.end_date, delta_days)
+
+    for mesocycle in macrocycle.mesocycles or []:
+        mesocycle.start_date = _shift_date(mesocycle.start_date, delta_days)
+        mesocycle.end_date = _shift_date(mesocycle.end_date, delta_days)
+
+        for microcycle in mesocycle.microcycles or []:
+            microcycle.start_date = _shift_date(microcycle.start_date, delta_days)
+            microcycle.end_date = _shift_date(microcycle.end_date, delta_days)
+
+            for training_day in microcycle.training_days or []:
+                shifted_date = _shift_date(training_day.date, delta_days)
+                if shifted_date != training_day.date:
+                    shifted_training_day_count += 1
+                training_day.date = shifted_date
+
+    return shifted_training_day_count
+
+
+def _load_other_active_macrocycles(
+    db: Session,
+    client_id: int,
+    exclude_macrocycle_id: int,
+) -> list[Macrocycle]:
+    return (
+        db.query(Macrocycle)
+        .filter(
+            Macrocycle.client_id == client_id,
+            Macrocycle.id != exclude_macrocycle_id,
+            Macrocycle.status == MesocycleStatus.ACTIVE,
+        )
+        .all()
     )
 
 
@@ -265,15 +328,7 @@ def get_macrocycle(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific macrocycle by ID with all nested data"""
-    macrocycle = db.query(Macrocycle).options(
-        joinedload(Macrocycle.mesocycles)
-            .joinedload(Mesocycle.microcycles)
-            .joinedload(Microcycle.training_days)
-            .joinedload(TrainingDay.exercises)
-            .joinedload(DayExercise.exercise)
-            .joinedload(Exercise.exercise_muscles)
-            .joinedload(ExerciseMuscle.muscle)
-    ).filter(Macrocycle.id == macrocycle_id).first()
+    macrocycle = _get_macrocycle_with_nested_data(db, macrocycle_id)
 
     if not macrocycle:
         raise HTTPException(
@@ -361,6 +416,74 @@ def update_macrocycle(
     db.refresh(macrocycle)
 
     return macrocycle
+
+
+@router.post("/{macrocycle_id}/activate", response_model=MacrocycleActivationResponse)
+def activate_macrocycle(
+    macrocycle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Activate a client macrocycle and reschedule all nested dates from today."""
+    macrocycle = _get_macrocycle_with_nested_data(db, macrocycle_id)
+
+    if not macrocycle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Macrocycle with id {macrocycle_id} not found"
+        )
+
+    _check_trainer_access(macrocycle, current_user)
+
+    if macrocycle.client_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Templates cannot be activated"
+        )
+
+    if macrocycle.status == MesocycleStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Macrocycle is already active"
+        )
+
+    effective_start_date = _today()
+    delta_days = (effective_start_date - macrocycle.start_date).days
+    shifted_training_day_count = _shift_macrocycle_schedule(macrocycle, delta_days)
+    macrocycle.status = MesocycleStatus.ACTIVE
+
+    archived_macrocycle_ids: list[str] = []
+    completed_macrocycle_ids: list[str] = []
+
+    other_active_macrocycles = _load_other_active_macrocycles(db, macrocycle.client_id, macrocycle.id)
+    for other_macrocycle in other_active_macrocycles:
+        if other_macrocycle.end_date and other_macrocycle.end_date < effective_start_date:
+            other_macrocycle.status = MesocycleStatus.COMPLETED
+            completed_macrocycle_ids.append(str(other_macrocycle.id))
+        else:
+            other_macrocycle.status = MesocycleStatus.ARCHIVED
+            archived_macrocycle_ids.append(str(other_macrocycle.id))
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    refreshed_macrocycle = _get_macrocycle_with_nested_data(db, macrocycle_id)
+    if not refreshed_macrocycle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Macrocycle with id {macrocycle_id} not found"
+        )
+
+    return {
+        "macrocycle": refreshed_macrocycle,
+        "effective_start_date": effective_start_date,
+        "shifted_training_day_count": shifted_training_day_count,
+        "archived_macrocycle_ids": archived_macrocycle_ids,
+        "completed_macrocycle_ids": completed_macrocycle_ids,
+    }
 
 
 @router.delete("/{macrocycle_id}", status_code=status.HTTP_204_NO_CONTENT)
