@@ -1385,6 +1385,9 @@ def log_exercise_set(
         response.status_code = status.HTTP_200_OK
         for existing_set in existing_sets:
             db.delete(existing_set)
+        flush = getattr(db, "flush", None)
+        if callable(flush):
+            flush()
 
     timestamp = utc_now()
     created_segments: list[ExerciseSetLog] = []

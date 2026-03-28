@@ -33,6 +33,7 @@ from core.dependencies import (
     get_current_user,
 )
 from services.ai_generator import AIWorkoutGenerator, ExerciseMapper
+from services.ai_slotting import normalize_exercise_id
 from services.interview_mapper import InterviewToAIRequestMapper
 from services.patient_context import build_patient_context
 
@@ -796,9 +797,6 @@ async def generate_workout(
     # Verificar permisos
     _ensure_trainer_or_admin(current_user)
 
-    # Limitar a un solo microciclo para ahorrar tokens
-    single_cycle_warning = _enforce_single_microcycle(request)
-
     phase = "load_exercises"
     try:
         # Obtener ejercicios disponibles con datos de músculos
@@ -824,7 +822,7 @@ async def generate_workout(
         # Mapear ejercicios inválidos a equivalentes válidos
         if result.success and result.macrocycle:
             mapper = ExerciseMapper(exercise_list)
-            macrocycle_dict = _trim_to_single_microcycle(result.macrocycle.model_dump())
+            macrocycle_dict = result.macrocycle.model_dump()
             mapped_macrocycle = mapper.map_exercises_in_program(macrocycle_dict)
             result.macrocycle = GeneratedMacrocycle(**mapped_macrocycle)
 
@@ -843,10 +841,6 @@ async def generate_workout(
                     f"No se encontraron equivalentes para: {', '.join(unique_unmapped)}"
                     + (f" y {len(mapper.unmapped_exercises) - 5} más" if len(mapper.unmapped_exercises) > 5 else "")
                 )
-
-        if single_cycle_warning:
-            result.warnings = result.warnings or []
-            result.warnings.append(single_cycle_warning)
 
         return result
     except HTTPException:
@@ -907,7 +901,7 @@ async def preview_workout(
         # Mapear ejercicios inválidos a equivalentes válidos
         if result.success and result.macrocycle:
             mapper = ExerciseMapper(exercise_list)
-            macrocycle_dict = _trim_to_single_microcycle(result.macrocycle.model_dump())
+            macrocycle_dict = result.macrocycle.model_dump()
             mapped_macrocycle = mapper.map_exercises_in_program(macrocycle_dict)
             result.macrocycle = GeneratedMacrocycle(**mapped_macrocycle)
 
@@ -974,10 +968,13 @@ async def save_generated_workout(
 
     try:
         # Convertir el macrocycle a diccionario para trabajar con Ã©l
-        macrocycle_data = _trim_to_single_microcycle(save_request.workout_data.macrocycle.model_dump())
+        macrocycle_data = save_request.workout_data.macrocycle.model_dump()
 
         # Obtener IDs de ejercicios vÃ¡lidos de la DB
-        valid_exercise_ids = {ex.id for ex in db.query(Exercise.id).all()}
+        exercises = db.query(Exercise).all()
+        valid_exercise_ids = {ex.id for ex in exercises}
+        mapper = ExerciseMapper(_build_exercise_catalog(exercises))
+        macrocycle_data = mapper.map_exercises_in_program(macrocycle_data)
 
         # Contador de ejercicios filtrados
         filtered_exercises_count = 0
@@ -1081,7 +1078,7 @@ async def save_generated_workout(
                     db.flush()
 
                     for ex_data in day_data.get("exercises", []):
-                        exercise_id = ex_data.get("exercise_id")
+                        exercise_id = normalize_exercise_id(ex_data.get("exercise_id"))
 
                         # Validar que el ejercicio existe en la DB
                         if exercise_id not in valid_exercise_ids:
@@ -1140,11 +1137,21 @@ async def save_generated_workout(
             "message": "Programa guardado exitosamente"
         }
 
-        if filtered_exercises_count > 0:
-            response["warning"] = (
-                f"{filtered_exercises_count} ejercicio(s) fueron omitidos "
-                "porque no existen en la base de datos"
+        warnings: list[str] = []
+        if mapper.mapped_count > 0:
+            warnings.append(
+                f"{mapper.mapped_count} ejercicio(s) fueron remapeados antes de persistir"
             )
+        if filtered_exercises_count > 0:
+            warnings.append(
+                f"{filtered_exercises_count} ejercicio(s) fueron omitidos porque no existen en la base de datos"
+            )
+        if mapper.unmapped_exercises:
+            warnings.append(
+                f"No se encontraron equivalentes para {len(set(mapper.unmapped_exercises))} ejercicio(s) antes de guardar"
+            )
+        if warnings:
+            response["warning"] = " | ".join(warnings)
 
         return response
 

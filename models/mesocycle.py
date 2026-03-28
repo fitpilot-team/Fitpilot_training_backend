@@ -205,8 +205,10 @@ class DayExercise(Base):
     phase = Column(
         Enum(
             ExercisePhase,
+            name="exercise_phase",
+            schema="training",
             values_callable=lambda enum_type: [e.value for e in enum_type],
-            native_enum=False,
+            native_enum=True,
         ),
         default=ExercisePhase.MAIN,
         nullable=False,
