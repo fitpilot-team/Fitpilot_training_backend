@@ -108,6 +108,30 @@ Exercise media now uploads only to Cloudflare R2 and persists public CDN URLs (`
 
 New exercise media and profile images no longer write to local disk.
 
+## AI generator
+
+The training AI generator now supports a slot-based internal architecture for multi-week programs while keeping the public response contract backward compatible.
+
+Current behavior:
+- `/api/ai/preview` remains a fast 1-microcycle preview
+- `/api/ai/generate` respects the full requested duration
+- `/api/ai/save` persists the full generated macrocycle
+- multi-week generation can use slot candidates, base-week expansion, and phased generation
+
+Anthropic model configuration:
+- default model: `claude-sonnet-4-6`
+- override with `ANTHROPIC_MODEL` if you need to pin another Claude release
+- add `ANTHROPIC_API_KEY` in `fitpilot-training-backend/.env` when you run the backend directly
+- add `ANTHROPIC_API_KEY` in `fitpilot-training-backend/.env.fit-pilot10` when you run the root Docker stack
+
+How to test:
+- `/api/ai/test-generate` does not call Anthropic and is useful for validating the backend flow without credits
+- `/api/ai/preview` is the cheapest real Anthropic test once `ANTHROPIC_API_KEY` is configured
+- `/api/ai/generate` is the real full-program path and uses the configured `ANTHROPIC_MODEL`
+
+Operational and architecture details:
+- [AI_GENERATOR_SLOT_BASED.md](/c:/Users/ale_o/Fit-pilot1.0/fitpilot-training-backend/AI_GENERATOR_SLOT_BASED.md)
+
 ## Legacy image cleanup script
 
 Dry-run:

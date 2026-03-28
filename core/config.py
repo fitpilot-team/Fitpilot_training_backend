@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # API Keys
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
 
     # JWT
     SECRET_KEY: str = "your-secret-key-change-in-production"

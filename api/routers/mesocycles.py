@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased, joinedload
 from models.base import get_db
 from models.user import User
-from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay, DayExercise, MesocycleStatus
+from models.mesocycle import Macrocycle, Mesocycle, Microcycle, TrainingDay, DayExercise, MesocycleStatus, ExercisePhase
 from models.exercise import Exercise
 from models.exercise_muscle import ExerciseMuscle
 from core.timing import elapsed_ms, format_timing_fields
@@ -127,6 +127,220 @@ def _load_other_active_macrocycles(
         )
         .all()
     )
+
+
+def _get_microcycle_with_nested_data(
+    db: Session,
+    mesocycle_id: int,
+    microcycle_id: int,
+) -> Optional[Microcycle]:
+    return (
+        db.query(Microcycle)
+        .options(
+            joinedload(Microcycle.training_days)
+            .joinedload(TrainingDay.exercises)
+            .joinedload(DayExercise.exercise)
+            .joinedload(Exercise.exercise_muscles)
+            .joinedload(ExerciseMuscle.muscle)
+        )
+        .filter(
+            Microcycle.id == microcycle_id,
+            Microcycle.mesocycle_id == mesocycle_id,
+        )
+        .first()
+    )
+
+
+def _inclusive_day_count(start_date: date, end_date: date) -> int:
+    return (end_date - start_date).days + 1
+
+
+def _sort_microcycles(microcycles: list[Microcycle]) -> list[Microcycle]:
+    return sorted(
+        microcycles,
+        key=lambda microcycle: (
+            microcycle.start_date,
+            microcycle.week_number,
+            microcycle.id or 0,
+        ),
+    )
+
+
+def _sort_mesocycles(mesocycles: list[Mesocycle]) -> list[Mesocycle]:
+    return sorted(
+        mesocycles,
+        key=lambda mesocycle: (
+            mesocycle.start_date,
+            mesocycle.block_number,
+            mesocycle.id or 0,
+        ),
+    )
+
+
+def _build_canonical_microcycle_name(week_number: int) -> str:
+    return f"Microciclo {week_number}"
+
+
+def _normalize_mesocycle_microcycle_names(mesocycle: Mesocycle) -> None:
+    for microcycle in mesocycle.microcycles or []:
+        microcycle.name = _build_canonical_microcycle_name(microcycle.week_number)
+
+
+def _shift_training_day_schedule(training_day: TrainingDay, delta_days: int) -> None:
+    training_day.date = _shift_date(training_day.date, delta_days)
+
+
+def _shift_microcycle_schedule(microcycle: Microcycle, delta_days: int) -> None:
+    microcycle.start_date = _shift_date(microcycle.start_date, delta_days)
+    microcycle.end_date = _shift_date(microcycle.end_date, delta_days)
+
+    for training_day in microcycle.training_days or []:
+        _shift_training_day_schedule(training_day, delta_days)
+
+
+def _shift_mesocycle_schedule(mesocycle: Mesocycle, delta_days: int) -> None:
+    mesocycle.start_date = _shift_date(mesocycle.start_date, delta_days)
+    mesocycle.end_date = _shift_date(mesocycle.end_date, delta_days)
+
+    for microcycle in mesocycle.microcycles or []:
+        _shift_microcycle_schedule(microcycle, delta_days)
+
+
+def _clone_day_exercise(db: Session, training_day_id: int, original_exercise: DayExercise) -> DayExercise:
+    phase = original_exercise.phase
+    # Some existing rows come back as raw strings even though the database column is a native enum.
+    if phase is not None and not isinstance(phase, ExercisePhase):
+        phase = ExercisePhase(phase)
+
+    duplicated_exercise = DayExercise(
+        training_day_id=training_day_id,
+        exercise_id=original_exercise.exercise_id,
+        order_index=original_exercise.order_index,
+        phase=phase,
+        sets=original_exercise.sets,
+        reps_min=original_exercise.reps_min,
+        reps_max=original_exercise.reps_max,
+        rest_seconds=original_exercise.rest_seconds,
+        effort_type=original_exercise.effort_type,
+        effort_value=original_exercise.effort_value,
+        tempo=original_exercise.tempo,
+        set_type=original_exercise.set_type,
+        duration_seconds=original_exercise.duration_seconds,
+        intensity_zone=original_exercise.intensity_zone,
+        distance_meters=original_exercise.distance_meters,
+        target_calories=original_exercise.target_calories,
+        intervals=original_exercise.intervals,
+        work_seconds=original_exercise.work_seconds,
+        interval_rest_seconds=original_exercise.interval_rest_seconds,
+        notes=original_exercise.notes,
+        rpe_target=original_exercise.rpe_target,
+    )
+    db.add(duplicated_exercise)
+    return duplicated_exercise
+
+
+def _clone_training_day(
+    db: Session,
+    microcycle_id: int,
+    original_day: TrainingDay,
+    new_microcycle_start_date: date,
+    original_microcycle_start_date: date,
+) -> TrainingDay:
+    day_offset = (original_day.date - original_microcycle_start_date).days
+    duplicated_day = TrainingDay(
+        microcycle_id=microcycle_id,
+        day_number=original_day.day_number,
+        date=new_microcycle_start_date + timedelta(days=day_offset),
+        session_index=original_day.session_index,
+        session_label=original_day.session_label,
+        name=original_day.name,
+        focus=original_day.focus,
+        rest_day=original_day.rest_day,
+        notes=original_day.notes,
+    )
+    db.add(duplicated_day)
+    db.flush()
+
+    for original_exercise in original_day.exercises or []:
+        _clone_day_exercise(db, duplicated_day.id, original_exercise)
+
+    return duplicated_day
+
+
+def _duplicate_microcycle_tree(
+    db: Session,
+    mesocycle_id: int,
+    original_microcycle: Microcycle,
+    new_week_number: int,
+) -> Microcycle:
+    duration_days = _inclusive_day_count(original_microcycle.start_date, original_microcycle.end_date)
+    duplicated_microcycle = Microcycle(
+        mesocycle_id=mesocycle_id,
+        week_number=new_week_number,
+        name=_build_canonical_microcycle_name(new_week_number),
+        start_date=original_microcycle.end_date + timedelta(days=1),
+        end_date=original_microcycle.end_date + timedelta(days=duration_days),
+        intensity_level=original_microcycle.intensity_level,
+        notes=original_microcycle.notes,
+    )
+    db.add(duplicated_microcycle)
+    db.flush()
+
+    for original_day in sorted(
+        original_microcycle.training_days or [],
+        key=lambda day: (day.day_number, day.session_index, day.id or 0),
+    ):
+        _clone_training_day(
+            db,
+            duplicated_microcycle.id,
+            original_day,
+            duplicated_microcycle.start_date,
+            original_microcycle.start_date,
+        )
+
+    return duplicated_microcycle
+
+
+def _insert_duplicate_microcycle(
+    db: Session,
+    macrocycle: Macrocycle,
+    mesocycle: Mesocycle,
+    original_microcycle: Microcycle,
+) -> Microcycle:
+    sorted_microcycles = _sort_microcycles(list(mesocycle.microcycles or []))
+    original_index = next(
+        index for index, microcycle in enumerate(sorted_microcycles)
+        if microcycle.id == original_microcycle.id
+    )
+    duration_days = _inclusive_day_count(original_microcycle.start_date, original_microcycle.end_date)
+
+    duplicated_microcycle = _duplicate_microcycle_tree(
+        db=db,
+        mesocycle_id=mesocycle.id,
+        original_microcycle=original_microcycle,
+        new_week_number=original_microcycle.week_number + 1,
+    )
+
+    subsequent_microcycles = sorted_microcycles[original_index + 1:]
+    for microcycle in subsequent_microcycles:
+        _shift_microcycle_schedule(microcycle, duration_days)
+        microcycle.week_number += 1
+
+    _normalize_mesocycle_microcycle_names(mesocycle)
+
+    sorted_mesocycles = _sort_mesocycles(list(macrocycle.mesocycles or []))
+    current_mesocycle_index = next(
+        index for index, current_mesocycle in enumerate(sorted_mesocycles)
+        if current_mesocycle.id == mesocycle.id
+    )
+
+    for downstream_mesocycle in sorted_mesocycles[current_mesocycle_index + 1:]:
+        _shift_mesocycle_schedule(downstream_mesocycle, duration_days)
+
+    mesocycle.end_date = _shift_date(mesocycle.end_date, duration_days)
+    macrocycle.end_date = _shift_date(macrocycle.end_date, duration_days)
+
+    return duplicated_microcycle
 
 
 # =============== Macrocycle Endpoints ===============
@@ -642,6 +856,7 @@ def create_microcycle(
     _check_trainer_access(macrocycle, current_user)
 
     microcycle = _create_microcycle_nested(db, mesocycle.id, microcycle_data)
+    _normalize_mesocycle_microcycle_names(mesocycle)
 
     db.commit()
     db.refresh(microcycle)
@@ -690,6 +905,71 @@ def delete_microcycle(
     db.commit()
 
     return None
+
+
+@router.post(
+    "/{macrocycle_id}/mesocycles/{mesocycle_id}/microcycles/{microcycle_id}/duplicate",
+    response_model=MicrocycleResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def duplicate_microcycle(
+    macrocycle_id: int,
+    mesocycle_id: int,
+    microcycle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Duplicate a microcycle, insert it after the original, and shift downstream schedule."""
+    macrocycle = _get_macrocycle_with_nested_data(db, macrocycle_id)
+    if not macrocycle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Macrocycle with id {macrocycle_id} not found",
+        )
+
+    _check_trainer_access(macrocycle, current_user)
+
+    mesocycle = next(
+        (current_mesocycle for current_mesocycle in macrocycle.mesocycles or [] if current_mesocycle.id == mesocycle_id),
+        None,
+    )
+    if mesocycle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Mesocycle with id {mesocycle_id} not found",
+        )
+
+    original_microcycle = next(
+        (current_microcycle for current_microcycle in mesocycle.microcycles or [] if current_microcycle.id == microcycle_id),
+        None,
+    )
+    if original_microcycle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Microcycle with id {microcycle_id} not found",
+        )
+
+    duplicated_microcycle = _insert_duplicate_microcycle(
+        db=db,
+        macrocycle=macrocycle,
+        mesocycle=mesocycle,
+        original_microcycle=original_microcycle,
+    )
+
+    db.commit()
+
+    duplicated_microcycle = _get_microcycle_with_nested_data(
+        db=db,
+        mesocycle_id=mesocycle_id,
+        microcycle_id=duplicated_microcycle.id,
+    )
+    if duplicated_microcycle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Microcycle with id {microcycle_id} not found",
+        )
+
+    return duplicated_microcycle
 
 
 # =============== Training Day Endpoints ===============

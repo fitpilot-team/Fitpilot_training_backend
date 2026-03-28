@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import date
 from typing import Optional, List, Literal
 from enum import Enum
@@ -319,6 +319,14 @@ class GeneratedDayExercise(BaseModel):
     effort_value: float = Field(ge=0, le=10)
     tempo: Optional[str] = None
     notes: Optional[str] = None
+    slot_role: Optional[str] = Field(
+        default=None,
+        description="Rol funcional interno del ejercicio cuando se usa generacion por slots"
+    )
+    slot_candidate_ids: Optional[List[int]] = Field(
+        default=None,
+        description="IDs candidatos considerados para este slot; opcional y no breaking"
+    )
 
 
 class GeneratedTrainingDay(BaseModel):
@@ -483,11 +491,26 @@ class PatientContext(BaseModel):
 
 # =============== Response Principal ===============
 
+class GenerationMetadata(BaseModel):
+    """Metadata no breaking para debug y observabilidad de la generacion IA."""
+
+    generation_scope: Optional[Literal["preview", "full_short", "full_standard", "full_phased"]] = None
+    used_slot_based_generation: bool = False
+    used_phased_generation: bool = False
+    progression_model: Optional[str] = None
+    template_version: Optional[str] = None
+    candidate_group_count: Optional[int] = None
+    flat_catalog_size: Optional[int] = None
+    slot_candidate_count: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
+
 class AIWorkoutResponse(BaseModel):
     """Respuesta completa de la generación"""
     success: bool
     macrocycle: Optional[GeneratedMacrocycle] = None
     explanation: Optional[ProgramExplanation] = None
+    generation_metadata: Optional[GenerationMetadata] = None
     warnings: List[str] = Field(default=[], description="Advertencias sobre el programa")
     error: Optional[str] = None
 

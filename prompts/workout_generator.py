@@ -6,13 +6,18 @@ prompts de alta calidad que generan programas de entrenamiento consistentes.
 """
 
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from schemas.ai_generator import (
     AIWorkoutRequest,
     FitnessLevel,
     PrimaryGoal,
     ExerciseVariety,
     PatientContext,
+)
+from services.ai_slotting import (
+    SlotCatalogBuildResult,
+    build_slot_candidate_groups as infer_slot_candidate_groups,
+    render_slot_candidate_groups,
 )
 
 
@@ -908,6 +913,527 @@ def assemble_base_week_prompt(
     ]
     specific_content = "\n".join(specific_parts)
 
+    return cacheable_content, specific_content
+
+
+GenerationScope = Literal["preview", "full_short", "full_standard", "full_phased"]
+
+
+def filter_exercises_for_request(
+    exercises: List[Dict[str, Any]],
+    request: AIWorkoutRequest,
+) -> List[Dict[str, Any]]:
+    """Filtra ejercicios por objetivo, equipo, restricciones y nivel sin mutar la entrada."""
+    if not exercises:
+        return []
+
+    filtered: List[Dict[str, Any]] = []
+    goal = request.goals.primary_goal
+    equipment = request.equipment
+    restrictions = request.restrictions
+    level = request.user_profile.fitness_level
+
+    available_equip = {e.value for e in equipment.available_equipment}
+    if equipment.has_gym_access:
+        available_equip.update(["barbell", "dumbbells", "cables", "machines", "bench", "squat_rack"])
+
+    excluded = set()
+    if restrictions and restrictions.excluded_exercises:
+        excluded = {ex.lower() for ex in restrictions.excluded_exercises}
+
+    target_muscles = set()
+    if request.goals.target_muscle_groups:
+        target_muscles = {m.value for m in request.goals.target_muscle_groups}
+
+    goal_preferences = {
+        PrimaryGoal.HYPERTROPHY: {"multiarticular", "monoarticular"},
+        PrimaryGoal.STRENGTH: {"multiarticular"},
+        PrimaryGoal.POWER: {"multiarticular"},
+        PrimaryGoal.ENDURANCE: {"multiarticular", "monoarticular", "cardio"},
+        PrimaryGoal.FAT_LOSS: {"multiarticular", "cardio"},
+        PrimaryGoal.GENERAL_FITNESS: {"multiarticular", "monoarticular"},
+    }
+    preferred_types = goal_preferences.get(goal, {"multiarticular", "monoarticular"})
+
+    for exercise in exercises:
+        item = dict(exercise)
+        ex_name = str(item.get("name", "")).lower()
+        ex_equip = str(item.get("equipment_needed", "bodyweight")).lower()
+        ex_type = str(item.get("type", "multiarticular")).lower()
+        ex_class = str(item.get("exercise_class", "strength")).lower()
+        ex_difficulty = str(item.get("difficulty_level", "intermediate")).lower()
+
+        if any(excluded_name in ex_name for excluded_name in excluded):
+            continue
+        if ex_equip not in available_equip and ex_equip not in {"bodyweight", "ninguno", "none", ""}:
+            continue
+        if level == FitnessLevel.BEGINNER and ex_difficulty == "advanced":
+            continue
+
+        priority = 2
+        if ex_type not in preferred_types and ex_class != "cardio":
+            priority = 1
+
+        primary = item.get("primary_muscles", [])
+        if target_muscles and any(muscle in target_muscles for muscle in primary):
+            priority = 3
+
+        item["_priority"] = priority
+        filtered.append(item)
+
+    filtered.sort(key=lambda item: item.get("_priority", 0), reverse=True)
+    if len(filtered) > 80:
+        filtered = filtered[:80]
+
+    return filtered
+
+
+def build_slot_candidate_catalog(
+    exercises: List[Dict[str, Any]],
+    request: AIWorkoutRequest,
+) -> tuple[SlotCatalogBuildResult, str]:
+    filtered = filter_exercises_for_request(exercises, request)
+    result = infer_slot_candidate_groups(filtered, request)
+    if not result.groups:
+        return result, ""
+    return result, render_slot_candidate_groups(result.groups)
+
+
+def build_compressed_output_schema_v2() -> str:
+    """Schema comprimido con metadata opcional de slots."""
+    return """## FORMATO DE RESPUESTA COMPRIMIDO
+
+Usa este formato compacto cuando se solicite JSON comprimido:
+
+```json
+{
+  "m": {
+    "n": "Programa",
+    "d": "Descripcion",
+    "o": "hypertrophy",
+    "ms": [
+      {
+        "b": 1,
+        "n": "Bloque 1",
+        "f": "Acumulacion",
+        "mc": [
+          {
+            "w": 1,
+            "n": "Semana 1",
+            "i": "medium",
+            "td": [
+              {
+                "d": 1,
+                "n": "Push",
+                "f": "Pecho",
+                "r": false,
+                "ex": [
+                  {"id": "12", "n": "Bench Press", "s": 3, "rm": 8, "rx": 12, "rs": 90, "et": "RIR", "ev": 2, "ph": "main", "sr": "primary_horizontal_press", "sc": [12, 33, 71]}
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "e": {
+    "r": "Explicacion",
+    "p": "Progresion",
+    "t": ["Tip 1"]
+  }
+}
+```
+
+Claves extra opcionales:
+- sr = slot_role
+- sc = slot_candidate_ids
+
+Responde SOLO con JSON."""
+
+
+def build_output_schema_v2() -> str:
+    """Schema expandido con metadata opcional de slots."""
+    return """## FORMATO DE RESPUESTA
+
+Debes responder con un JSON valido. Mantén `macrocycle` y `explanation` compatibles con el contrato actual.
+
+Cada ejercicio puede incluir opcionalmente:
+- `slot_role`: rol funcional del slot
+- `slot_candidate_ids`: ids candidatos considerados para ese slot
+
+Reglas:
+1. `exercise_id` debe existir en el catalogo enviado.
+2. Para cardio usa `duration_seconds`; para fuerza usa `reps_min/reps_max`.
+3. No incluyas texto fuera del JSON."""
+
+
+def build_constraints_v2(
+    request: AIWorkoutRequest,
+    *,
+    generation_scope: GenerationScope,
+) -> str:
+    constraints = ["## RESTRICCIONES DE GENERACION"]
+    base_constraints = build_constraints(request)
+
+    if generation_scope == "preview":
+        scope_block = """
+### Scope
+- Genera SOLO 1 microciclo de preview rapido.
+- No generes progresiones ni semanas adicionales.
+""".strip()
+    elif generation_scope == "full_short":
+        scope_block = """
+### Scope
+- Genera el programa completo solicitado de 1 semana.
+- No lo reduzcas a preview.
+""".strip()
+    elif generation_scope == "full_standard":
+        scope_block = f"""
+### Scope
+- Genera la duracion completa solicitada: {request.program_duration.total_weeks} semanas.
+- Usa una semana base estable y progresiones locales.
+- Mantén ejercicios estables en hipertrofia salvo justificacion clara.
+""".strip()
+    else:
+        scope_block = f"""
+### Scope
+- Genera la duracion completa solicitada: {request.program_duration.total_weeks} semanas.
+- Esta ruta es phased: base week + progression matrix + expansion local.
+- Mantén ejercicios estables en hipertrofia salvo justificacion clara.
+""".strip()
+
+    constraints.append(scope_block)
+    constraints.append(base_constraints)
+
+    if request.goals.primary_goal == PrimaryGoal.HYPERTROPHY:
+        constraints.append(
+            """
+### Regla de hipertrofia
+- Prioriza cambios en sets, reps, effort_value, intensidad y deload.
+- Solo cambia ejercicios por restriccion, equipo, monotonia solicitada, dolor o variante mas tolerable.
+""".strip()
+        )
+
+    return "\n\n".join(part for part in constraints if part)
+
+
+def build_slot_selection_prompt(
+    request: AIWorkoutRequest,
+    *,
+    generation_scope: GenerationScope,
+) -> str:
+    return "\n".join(
+        [
+            "## INSTRUCCIONES DE SLOT SELECTION",
+            f"- Scope de generacion: {generation_scope}",
+            "- Elige 1 candidato por slot usando solo candidate groups listados.",
+            "- Devuelve `slot_role` y `slot_candidate_ids` en cada ejercicio cuando uses slots.",
+            "- Mantén estabilidad de ejercicios entre semanas.",
+        ]
+    )
+
+
+def build_mesocycle_template_prompt(
+    request: AIWorkoutRequest,
+    *,
+    generation_scope: GenerationScope,
+) -> str:
+    return "\n".join(
+        [
+            "## INSTRUCCIONES DE TEMPLATE DE MESOCICLO",
+            f"- total_weeks={request.program_duration.total_weeks}",
+            f"- mesocycle_weeks={request.program_duration.mesocycle_weeks}",
+            f"- generation_scope={generation_scope}",
+            "- No rehagas todas las semanas desde cero.",
+            "- Usa una micro base estable y expande localmente el resto del programa.",
+        ]
+    )
+
+
+def build_swap_rules_prompt(request: AIWorkoutRequest) -> str:
+    restrictions = request.restrictions
+    if not restrictions:
+        return ""
+
+    reasons = []
+    if restrictions.injuries:
+        reasons.append("lesion o molestia")
+    if restrictions.excluded_exercises:
+        reasons.append("ejercicio excluido")
+    if restrictions.mobility_limitations:
+        reasons.append("movilidad limitada")
+
+    if not reasons:
+        return ""
+
+    return "\n".join(
+        [
+            "## AJUSTES Y SWAP RULES",
+            f"- Solo sustituye ejercicios cuando exista {', '.join(reasons)}.",
+            "- Si sustituyes un ejercicio, mantente dentro del mismo slot o en la variante mas tolerable del mismo patron.",
+        ]
+    )
+
+
+def build_full_program_prompt(
+    request: AIWorkoutRequest,
+    *,
+    generation_scope: GenerationScope,
+    use_slot_candidates: bool,
+    compressed: bool,
+) -> str:
+    task_lines = ["## TAREA"]
+
+    if generation_scope == "preview":
+        task_lines.append("Genera SOLO una preview de 1 microciclo.")
+    elif generation_scope == "full_short":
+        task_lines.append("Genera el programa completo solicitado de 1 semana.")
+    else:
+        task_lines.append(
+            f"Genera el programa completo solicitado de {request.program_duration.total_weeks} semanas sin truncarlo."
+        )
+
+    task_lines.append(f"Comienza el programa el {request.program_duration.start_date.isoformat()}.")
+    if use_slot_candidates:
+        task_lines.append("Usa slot candidates como fuente principal de seleccion de ejercicios.")
+    else:
+        task_lines.append("Usa el catalogo filtrado como fuente principal de ejercicios.")
+    if compressed:
+        task_lines.append("Responde SOLO con JSON comprimido.")
+    else:
+        task_lines.append("Responde SOLO con JSON.")
+
+    return "\n".join(task_lines)
+
+
+def build_base_week_prompt_v2(
+    request: AIWorkoutRequest,
+    *,
+    generation_scope: GenerationScope,
+    use_slot_candidates: bool,
+) -> str:
+    lines = [
+        "## TAREA: GENERAR SEMANA BASE",
+        "Genera UNA semana base completa que servira como plantilla estable para el programa.",
+        f"- Dias por semana disponibles: {request.availability.days_per_week}",
+        f"- Nivel del usuario: {request.user_profile.fitness_level.value}",
+        "- La semana base debe poder expandirse localmente a semanas posteriores.",
+        "- Mantén estabilidad de ejercicios salvo justificacion clara.",
+    ]
+    if use_slot_candidates:
+        lines.append("- Usa slot candidate groups y devuelve metadata de slot por ejercicio.")
+    if generation_scope == "full_phased":
+        lines.append("- Esta semana base alimenta un flujo phased para 4+ semanas.")
+    else:
+        lines.append("- Esta semana base alimenta un flujo estructurado para 2-3 semanas.")
+    lines.append("Responde SOLO con JSON comprimido.")
+    return "\n".join(lines)
+
+
+def build_progression_prompt_v2(
+    base_week_data: Dict[str, Any],
+    total_weeks: int,
+    *,
+    slot_aware: bool,
+) -> str:
+    example_change = (
+        '{"day": 1, "slot_role": "primary_horizontal_press", "s": 4, "ev": 1}'
+        if slot_aware
+        else '{"day": 1, "ex_idx": 0, "s": 4, "ev": 1}'
+    )
+    slot_rule = (
+        "- Usa `slot_role` como referencia principal y `replace_candidate_id` solo si necesitas una sustitucion."
+        if slot_aware
+        else "- Usa `ex_idx` para referenciar el ejercicio."
+    )
+    return f"""## TAREA: GENERAR MATRIZ DE PROGRESION
+
+Ya tienes la SEMANA BASE. Ahora genera SOLO los cambios de parametros para las semanas 2-{total_weeks}.
+
+Semana base (referencia):
+{json.dumps(base_week_data, indent=2)}
+
+Formato de respuesta:
+```json
+{{
+  "progression": [
+    {{
+      "week": 2,
+      "intensity": "medium",
+      "changes": [{example_change}]
+    }}
+  ],
+  "deload_weeks": [4, 8, 12]
+}}
+```
+
+REGLAS:
+- Solo incluye ejercicios que cambian.
+- Prioriza cambios en sets, reps, effort_value, intensidad y descanso.
+- Reduce volumen 40-50% en deload.
+{slot_rule}
+
+Responde SOLO con JSON."""
+
+
+def _build_catalog_section_v2(
+    exercises: List[Dict[str, Any]],
+    request: AIWorkoutRequest,
+    *,
+    use_filtered_catalog: bool,
+    slot_catalog_result: Optional[SlotCatalogBuildResult],
+    generation_scope: GenerationScope,
+) -> str:
+    if generation_scope != "preview" and slot_catalog_result and slot_catalog_result.eligible and slot_catalog_result.groups:
+        return render_slot_candidate_groups(slot_catalog_result.groups)
+    if use_filtered_catalog:
+        return build_filtered_catalog(exercises, request)
+    return build_exercise_catalog(exercises)
+
+
+def assemble_program_prompt_v2(
+    request: AIWorkoutRequest,
+    exercises: List[Dict[str, Any]],
+    *,
+    generation_scope: GenerationScope,
+    use_filtered_catalog: bool = True,
+    use_compressed_output: bool = False,
+    slot_catalog_result: Optional[SlotCatalogBuildResult] = None,
+) -> str:
+    patient_context_block = build_patient_context_block(request.patient_context)
+    use_slot_candidates = bool(
+        generation_scope != "preview"
+        and slot_catalog_result
+        and slot_catalog_result.eligible
+        and slot_catalog_result.groups
+    )
+
+    sections = [
+        build_user_context(request),
+        patient_context_block,
+        "",
+        _build_catalog_section_v2(
+            exercises,
+            request,
+            use_filtered_catalog=use_filtered_catalog,
+            slot_catalog_result=slot_catalog_result,
+            generation_scope=generation_scope,
+        ),
+        "",
+        build_constraints_v2(request, generation_scope=generation_scope),
+        "",
+        build_compressed_output_schema_v2() if use_compressed_output else build_output_schema_v2(),
+        "",
+        build_slot_selection_prompt(request, generation_scope=generation_scope) if use_slot_candidates else "",
+        build_mesocycle_template_prompt(request, generation_scope=generation_scope) if generation_scope in {"full_standard", "full_phased"} else "",
+        build_swap_rules_prompt(request),
+        "",
+        build_full_program_prompt(
+            request,
+            generation_scope=generation_scope,
+            use_slot_candidates=use_slot_candidates,
+            compressed=use_compressed_output,
+        ),
+    ]
+    return "\n".join(section for section in sections if section)
+
+
+def assemble_optimized_program_prompt(
+    request: AIWorkoutRequest,
+    exercises: List[Dict[str, Any]],
+    *,
+    generation_scope: GenerationScope,
+    use_filtered_catalog: bool = True,
+    use_compressed_output: bool = True,
+    slot_catalog_result: Optional[SlotCatalogBuildResult] = None,
+) -> tuple[str, str]:
+    patient_context_block = build_patient_context_block(request.patient_context)
+    use_slot_candidates = bool(
+        generation_scope != "preview"
+        and slot_catalog_result
+        and slot_catalog_result.eligible
+        and slot_catalog_result.groups
+    )
+
+    cacheable_parts = [
+        build_system_prompt(),
+        "",
+        _build_catalog_section_v2(
+            exercises,
+            request,
+            use_filtered_catalog=use_filtered_catalog,
+            slot_catalog_result=slot_catalog_result,
+            generation_scope=generation_scope,
+        ),
+        "",
+        build_compressed_output_schema_v2() if use_compressed_output else build_output_schema_v2(),
+    ]
+    cacheable_content = "\n".join(part for part in cacheable_parts if part)
+
+    specific_parts = [
+        build_user_context(request),
+        patient_context_block,
+        "",
+        build_constraints_v2(request, generation_scope=generation_scope),
+        "",
+        build_slot_selection_prompt(request, generation_scope=generation_scope) if use_slot_candidates else "",
+        build_mesocycle_template_prompt(request, generation_scope=generation_scope) if generation_scope in {"full_standard", "full_phased"} else "",
+        build_swap_rules_prompt(request),
+        "",
+        build_full_program_prompt(
+            request,
+            generation_scope=generation_scope,
+            use_slot_candidates=use_slot_candidates,
+            compressed=use_compressed_output,
+        ),
+    ]
+    specific_content = "\n".join(part for part in specific_parts if part)
+    return cacheable_content, specific_content
+
+
+def assemble_base_week_prompt_v2(
+    request: AIWorkoutRequest,
+    exercises: List[Dict[str, Any]],
+    *,
+    generation_scope: GenerationScope,
+    slot_catalog_result: Optional[SlotCatalogBuildResult] = None,
+) -> tuple[str, str]:
+    patient_context_block = build_patient_context_block(request.patient_context)
+    use_slot_candidates = bool(slot_catalog_result and slot_catalog_result.eligible and slot_catalog_result.groups)
+
+    cacheable_parts = [
+        build_system_prompt(),
+        "",
+        _build_catalog_section_v2(
+            exercises,
+            request,
+            use_filtered_catalog=True,
+            slot_catalog_result=slot_catalog_result,
+            generation_scope=generation_scope,
+        ),
+        "",
+        build_compressed_output_schema_v2(),
+    ]
+    cacheable_content = "\n".join(part for part in cacheable_parts if part)
+
+    specific_parts = [
+        build_user_context(request),
+        patient_context_block,
+        "",
+        build_constraints_v2(request, generation_scope=generation_scope),
+        "",
+        build_slot_selection_prompt(request, generation_scope=generation_scope) if use_slot_candidates else "",
+        build_mesocycle_template_prompt(request, generation_scope=generation_scope),
+        build_swap_rules_prompt(request),
+        "",
+        build_base_week_prompt_v2(
+            request,
+            generation_scope=generation_scope,
+            use_slot_candidates=use_slot_candidates,
+        ),
+    ]
+    specific_content = "\n".join(part for part in specific_parts if part)
     return cacheable_content, specific_content
 
 

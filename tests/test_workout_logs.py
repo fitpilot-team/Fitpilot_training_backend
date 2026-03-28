@@ -139,6 +139,7 @@ class LogSetSession:
         self.created_sets = []
         self.deleted_sets = []
         self.existing_sets = []
+        self.flush_called = False
         self.workout_log = SimpleNamespace(
             id=37,
             client_id=13,
@@ -168,6 +169,9 @@ class LogSetSession:
 
     def delete(self, set_log):
         self.deleted_sets.append(set_log)
+
+    def flush(self):
+        self.flush_called = True
 
     def commit(self):
         for index, set_log in enumerate(self.created_sets, start=1):
@@ -345,6 +349,7 @@ def test_log_exercise_set_accepts_segmented_payload_and_replaces_existing_group(
 
     assert response.status_code == 200
     assert [set_log.id for set_log in session.deleted_sets] == [701, 702]
+    assert session.flush_called is True
     assert len(session.created_sets) == 2
     assert [set_log.segment_index for set_log in session.created_sets] == [1, 2]
 

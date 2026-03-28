@@ -18,6 +18,7 @@ from core.config import settings
 from schemas.ai_generator import (
     AIWorkoutRequest,
     AIWorkoutResponse,
+    GenerationMetadata,
     GeneratedMacrocycle,
     GeneratedMesocycle,
     GeneratedMicrocycle,
@@ -28,10 +29,19 @@ from schemas.ai_generator import (
 )
 from prompts.workout_generator import (
     build_system_prompt,
-    assemble_final_prompt,
-    assemble_optimized_prompt,
-    assemble_base_week_prompt,
-    build_progression_prompt,
+    assemble_program_prompt_v2,
+    assemble_optimized_program_prompt,
+    assemble_base_week_prompt_v2,
+    build_progression_prompt_v2,
+    build_slot_candidate_catalog,
+)
+from services.ai_slotting import (
+    SlotCatalogBuildResult,
+    SlotProgramTemplate,
+    build_slot_program_template,
+    estimate_prompt_tokens,
+    infer_slot_role,
+    normalize_exercise_id,
 )
 
 # Configurar logging para este módulo
@@ -50,7 +60,7 @@ class AIWorkoutGenerator:
             raise ValueError("ANTHROPIC_API_KEY no está configurada")
 
         self.client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self.model = "claude-sonnet-4-5-20250929"
+        self.model = settings.ANTHROPIC_MODEL
         self.timeout = 300.0  # 5 minutos para solicitudes largas
         self.base_max_tokens = 8192
 
@@ -67,6 +77,125 @@ class AIWorkoutGenerator:
         estimated = base + (weeks * days * tokens_per_day)
         # Límite máximo aumentado para soportar programas largos
         return min(estimated, 64000)
+
+    def _determine_generation_scope(self, request: AIWorkoutRequest) -> str:
+        weeks = request.program_duration.total_weeks
+        if weeks <= 1:
+            return "full_short"
+        if self._should_use_phased(request):
+            return "full_phased"
+        return "full_standard"
+
+    def _build_slot_catalog_result(
+        self,
+        request: AIWorkoutRequest,
+        available_exercises: List[Dict[str, Any]],
+    ) -> SlotCatalogBuildResult:
+        result, _ = build_slot_candidate_catalog(available_exercises, request)
+        return result
+
+    def _build_generation_metadata(
+        self,
+        *,
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
+        used_slot_based_generation: bool,
+        used_phased_generation: bool,
+        progression_model: str,
+    ) -> GenerationMetadata:
+        candidate_group_count = slot_catalog_result.candidate_group_count if slot_catalog_result else 0
+        flat_catalog_size = len(slot_catalog_result.flat_catalog_exercises) if slot_catalog_result else None
+        slot_candidate_count = slot_catalog_result.total_candidates if slot_catalog_result else None
+        return GenerationMetadata(
+            generation_scope=generation_scope,
+            used_slot_based_generation=used_slot_based_generation,
+            used_phased_generation=used_phased_generation,
+            progression_model=progression_model,
+            template_version="slot_v1" if used_slot_based_generation else "flat_v1",
+            candidate_group_count=candidate_group_count,
+            flat_catalog_size=flat_catalog_size,
+            slot_candidate_count=slot_candidate_count,
+        )
+
+    def _log_generation_context(
+        self,
+        *,
+        request: AIWorkoutRequest,
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
+        cacheable_content: str,
+        specific_content: str,
+    ) -> None:
+        logger.info(
+            "ai_generator.generation.context",
+            extra={
+                "generation_scope": generation_scope,
+                "total_weeks": request.program_duration.total_weeks,
+                "used_slot_based_generation": bool(
+                    slot_catalog_result and slot_catalog_result.eligible and slot_catalog_result.groups
+                ),
+                "used_phased_generation": generation_scope == "full_phased",
+                "candidate_group_count": slot_catalog_result.candidate_group_count if slot_catalog_result else 0,
+                "flat_catalog_size": len(slot_catalog_result.flat_catalog_exercises) if slot_catalog_result else 0,
+                "slot_candidate_count": slot_catalog_result.total_candidates if slot_catalog_result else 0,
+                "cacheable_chars": len(cacheable_content),
+                "specific_chars": len(specific_content),
+                "cacheable_tokens_est": estimate_prompt_tokens(cacheable_content),
+                "specific_tokens_est": estimate_prompt_tokens(specific_content),
+            },
+        )
+
+    def _build_response_from_parsed(
+        self,
+        *,
+        request: AIWorkoutRequest,
+        parsed_data: Dict[str, Any],
+        available_exercises: List[Dict[str, Any]],
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
+        used_slot_based_generation: bool,
+        used_phased_generation: bool,
+        progression_model: str,
+    ) -> AIWorkoutResponse:
+        if settings.AI_USE_COMPRESSED_OUTPUT and "m" in parsed_data:
+            parsed_data = self._expand_compressed_response(parsed_data)
+
+        exercise_ids = {ex["id"] for ex in available_exercises}
+        warnings = self._validate_exercises(parsed_data, exercise_ids)
+        warnings.extend(self._validate_session_limits(
+            parsed_data, request.user_profile.fitness_level
+        ))
+        self._calculate_dates(parsed_data, request.program_duration.start_date)
+
+        metadata = self._build_generation_metadata(
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            used_slot_based_generation=used_slot_based_generation,
+            used_phased_generation=used_phased_generation,
+            progression_model=progression_model,
+        )
+
+        try:
+            macrocycle = GeneratedMacrocycle(**parsed_data["macrocycle"])
+            explanation = None
+            if "explanation" in parsed_data:
+                explanation = ProgramExplanation(**parsed_data["explanation"])
+
+            return AIWorkoutResponse(
+                success=True,
+                macrocycle=macrocycle,
+                explanation=explanation,
+                generation_metadata=metadata,
+                warnings=warnings,
+            )
+        except ValidationError as e:
+            logger.error(f"Error de validacion: {e}")
+            return AIWorkoutResponse(
+                success=False,
+                error=f"Error de validacion: {str(e)}",
+                generation_metadata=metadata,
+                warnings=warnings,
+            )
 
     async def generate_workout(
         self,
@@ -86,13 +215,36 @@ class AIWorkoutGenerator:
         """
         try:
             # Seleccionar método de generación
+            generation_scope = self._determine_generation_scope(request)
+            slot_catalog_result = self._build_slot_catalog_result(request, available_exercises)
+
+            if generation_scope == "full_phased":
+                return await self._generate_phased(
+                    request,
+                    available_exercises,
+                    generation_scope=generation_scope,
+                    slot_catalog_result=slot_catalog_result,
+                )
+            if generation_scope == "full_standard":
+                return await self._generate_structured_program(
+                    request,
+                    available_exercises,
+                    generation_scope=generation_scope,
+                    slot_catalog_result=slot_catalog_result,
+                )
             if settings.AI_USE_PROMPT_CACHING:
-                if self._should_use_phased(request):
-                    return await self._generate_phased(request, available_exercises)
-                else:
-                    return await self._generate_with_caching(request, available_exercises)
-            else:
-                return await self._generate_legacy(request, available_exercises)
+                return await self._generate_with_caching(
+                    request,
+                    available_exercises,
+                    generation_scope=generation_scope,
+                    slot_catalog_result=slot_catalog_result,
+                )
+            return await self._generate_legacy(
+                request,
+                available_exercises,
+                generation_scope=generation_scope,
+                slot_catalog_result=slot_catalog_result,
+            )
 
         except Exception as e:
             error_type = type(e).__name__
@@ -112,28 +264,33 @@ class AIWorkoutGenerator:
     async def _generate_with_caching(
         self,
         request: AIWorkoutRequest,
-        available_exercises: List[Dict[str, Any]]
+        available_exercises: List[Dict[str, Any]],
+        *,
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
     ) -> AIWorkoutResponse:
         """
         Genera programa usando Prompt Caching de Anthropic.
         Separa contenido cacheable (system + catálogo) del específico.
         """
-        # Construir prompts separados
-        cacheable_content, specific_content = assemble_optimized_prompt(
+        cacheable_content, specific_content = assemble_optimized_program_prompt(
             request,
             available_exercises,
+            generation_scope=generation_scope,
             use_filtered_catalog=settings.AI_FILTER_CATALOG,
-            use_compressed_output=settings.AI_USE_COMPRESSED_OUTPUT
+            use_compressed_output=settings.AI_USE_COMPRESSED_OUTPUT,
+            slot_catalog_result=slot_catalog_result,
         )
 
         max_tokens = self._calculate_max_tokens(request)
 
-        logger.info(
-            f"Generando programa OPTIMIZADO para cliente {request.client_id} "
-            f"({request.program_duration.total_weeks} semanas)"
+        self._log_generation_context(
+            request=request,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            cacheable_content=cacheable_content,
+            specific_content=specific_content,
         )
-        logger.info(f"Cacheable content: {len(cacheable_content)} chars")
-        logger.info(f"Specific content: {len(specific_content)} chars")
 
         # Llamar a Claude con Prompt Caching
         # El contenido cacheable va primero con cache_control
@@ -179,6 +336,19 @@ class AIWorkoutGenerator:
                 error="No se pudo parsear la respuesta de la IA"
             )
 
+        return self._build_response_from_parsed(
+            request=request,
+            parsed_data=parsed_data,
+            available_exercises=available_exercises,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            used_slot_based_generation=bool(
+                slot_catalog_result and slot_catalog_result.eligible and slot_catalog_result.groups
+            ),
+            used_phased_generation=False,
+            progression_model="one_shot",
+        )
+
         # Si la respuesta está comprimida, expandirla
         if settings.AI_USE_COMPRESSED_OUTPUT and "m" in parsed_data:
             parsed_data = self._expand_compressed_response(parsed_data)
@@ -217,13 +387,23 @@ class AIWorkoutGenerator:
     async def _generate_legacy(
         self,
         request: AIWorkoutRequest,
-        available_exercises: List[Dict[str, Any]]
+        available_exercises: List[Dict[str, Any]],
+        *,
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
     ) -> AIWorkoutResponse:
         """
         Generación legacy sin optimizaciones (fallback).
         """
         system_prompt = build_system_prompt()
-        user_prompt = assemble_final_prompt(request, available_exercises)
+        user_prompt = assemble_program_prompt_v2(
+            request,
+            available_exercises,
+            generation_scope=generation_scope,
+            use_filtered_catalog=settings.AI_FILTER_CATALOG,
+            use_compressed_output=False,
+            slot_catalog_result=slot_catalog_result,
+        )
         max_tokens = self._calculate_max_tokens(request)
 
         logger.info(
@@ -250,6 +430,19 @@ class AIWorkoutGenerator:
                 success=False,
                 error="No se pudo parsear la respuesta de la IA"
             )
+
+        return self._build_response_from_parsed(
+            request=request,
+            parsed_data=parsed_data,
+            available_exercises=available_exercises,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            used_slot_based_generation=bool(
+                slot_catalog_result and slot_catalog_result.eligible and slot_catalog_result.groups
+            ),
+            used_phased_generation=False,
+            progression_model="legacy_one_shot",
+        )
 
         exercise_ids = {ex["id"] for ex in available_exercises}
         warnings = self._validate_exercises(parsed_data, exercise_ids)
@@ -293,10 +486,164 @@ class AIWorkoutGenerator:
 
         return True
 
+    def _flat_only_slot_catalog(
+        self,
+        available_exercises: List[Dict[str, Any]],
+    ) -> SlotCatalogBuildResult:
+        return SlotCatalogBuildResult(flat_catalog_exercises=list(available_exercises))
+
+    def _hydrate_slot_metadata(
+        self,
+        data: Dict[str, Any],
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
+    ) -> Dict[str, Any]:
+        if not slot_catalog_result or not slot_catalog_result.groups:
+            return data
+
+        macrocycle = data.get("macrocycle", {})
+        group_map = slot_catalog_result.group_map
+        for mesocycle in macrocycle.get("mesocycles", []):
+            for microcycle in mesocycle.get("microcycles", []):
+                for day in microcycle.get("training_days", []):
+                    for exercise in day.get("exercises", []):
+                        slot_role = exercise.get("slot_role") or infer_slot_role(exercise)
+                        if not slot_role:
+                            continue
+                        exercise["slot_role"] = slot_role
+                        if not exercise.get("slot_candidate_ids") and slot_role in group_map:
+                            exercise["slot_candidate_ids"] = group_map[slot_role].candidate_ids
+        return data
+
+    async def _run_structured_generation(
+        self,
+        request: AIWorkoutRequest,
+        available_exercises: List[Dict[str, Any]],
+        *,
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
+        used_phased_generation: bool,
+    ) -> AIWorkoutResponse:
+        cacheable, specific = assemble_base_week_prompt_v2(
+            request,
+            available_exercises,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+        )
+        self._log_generation_context(
+            request=request,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            cacheable_content=cacheable,
+            specific_content=specific,
+        )
+
+        try:
+            base_response = await self.client.messages.create(
+                model=self.model,
+                max_tokens=4000,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": cacheable, "cache_control": {"type": "ephemeral"}},
+                        {"type": "text", "text": specific},
+                    ],
+                }],
+                timeout=self.timeout,
+            )
+        except Exception:
+            logger.exception("ai_generator.structured.base_week.failed")
+            return await self._generate_with_caching(
+                request,
+                available_exercises,
+                generation_scope=generation_scope,
+                slot_catalog_result=self._flat_only_slot_catalog(available_exercises),
+            )
+
+        base_week = self._parse_response(base_response.content[0].text)
+        if base_week is None:
+            logger.warning("ai_generator.structured.base_week.parse_failed")
+            return await self._generate_with_caching(
+                request,
+                available_exercises,
+                generation_scope=generation_scope,
+                slot_catalog_result=self._flat_only_slot_catalog(available_exercises),
+            )
+
+        expanded_base_week = self._expand_compressed_response(base_week) if "m" in base_week else copy.deepcopy(base_week)
+        expanded_base_week = self._hydrate_slot_metadata(expanded_base_week, slot_catalog_result)
+        template: SlotProgramTemplate = build_slot_program_template(expanded_base_week, slot_catalog_result)
+
+        progression_prompt = build_progression_prompt_v2(
+            expanded_base_week,
+            request.program_duration.total_weeks,
+            slot_aware=bool(slot_catalog_result and slot_catalog_result.eligible and template.template_days),
+        )
+        try:
+            progression_response = await self.client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": cacheable, "cache_control": {"type": "ephemeral"}},
+                        {"type": "text", "text": progression_prompt},
+                    ],
+                }],
+                timeout=self.timeout,
+            )
+        except Exception:
+            logger.exception("ai_generator.structured.progression.failed")
+            return await self._generate_with_caching(
+                request,
+                available_exercises,
+                generation_scope=generation_scope,
+                slot_catalog_result=self._flat_only_slot_catalog(available_exercises),
+            )
+
+        progression = self._parse_response(progression_response.content[0].text)
+        if progression is None:
+            logger.warning("ai_generator.structured.progression.parse_failed")
+            progression = self._default_progression(
+                request.program_duration.total_weeks,
+                request.program_duration.include_deload,
+            )
+
+        template.progression_rules = progression.get("progression", [])
+        full_program = self._apply_progression(expanded_base_week, progression, request)
+        return self._build_response_from_parsed(
+            request=request,
+            parsed_data=full_program,
+            available_exercises=available_exercises,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            used_slot_based_generation=bool(slot_catalog_result and slot_catalog_result.eligible and template.template_days),
+            used_phased_generation=used_phased_generation,
+            progression_model="base_week_progression",
+        )
+
+    async def _generate_structured_program(
+        self,
+        request: AIWorkoutRequest,
+        available_exercises: List[Dict[str, Any]],
+        *,
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
+    ) -> AIWorkoutResponse:
+        return await self._run_structured_generation(
+            request,
+            available_exercises,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            used_phased_generation=False,
+        )
+
     async def _generate_phased(
         self,
         request: AIWorkoutRequest,
-        available_exercises: List[Dict[str, Any]]
+        available_exercises: List[Dict[str, Any]],
+        *,
+        generation_scope: str,
+        slot_catalog_result: Optional[SlotCatalogBuildResult],
     ) -> AIWorkoutResponse:
         """
         Generación en fases: semana base + progresiones.
@@ -306,6 +653,14 @@ class AIWorkoutGenerator:
         Fase 2: Genera matriz de progresión (solo deltas)
         Fase 3: Expande localmente el programa completo
         """
+        return await self._run_structured_generation(
+            request,
+            available_exercises,
+            generation_scope=generation_scope,
+            slot_catalog_result=slot_catalog_result,
+            used_phased_generation=True,
+        )
+
         total_weeks = request.program_duration.total_weeks
 
         logger.info(
@@ -623,7 +978,9 @@ class AIWorkoutGenerator:
                     "effort_type": ex.get("et", ex.get("effort_type", "RIR")),
                     "effort_value": ex.get("ev", ex.get("effort_value", 2)),
                     "tempo": ex.get("t", ex.get("tempo")),
-                    "notes": ex.get("nt", ex.get("notes", ""))
+                    "notes": ex.get("nt", ex.get("notes", "")),
+                    "slot_role": ex.get("sr", ex.get("slot_role")),
+                    "slot_candidate_ids": ex.get("sc", ex.get("slot_candidate_ids")),
                 }
                 expanded["exercises"].append(exercise)
 
@@ -660,21 +1017,38 @@ class AIWorkoutGenerator:
         """
         Aplica un cambio de ejercicio a un día.
         """
-        ex_idx = change.get("ex_idx", 0)
         exercises = day.get("exercises", [])
+        target_exercise = None
 
-        if ex_idx < len(exercises):
-            ex = exercises[ex_idx]
-            if "s" in change:
-                ex["sets"] = change["s"]
-            if "ev" in change:
-                ex["effort_value"] = change["ev"]
-            if "rm" in change:
-                ex["reps_min"] = change["rm"]
-            if "rx" in change:
-                ex["reps_max"] = change["rx"]
-            if "rs" in change:
-                ex["rest_seconds"] = change["rs"]
+        slot_role = change.get("slot_role")
+        if slot_role:
+            target_exercise = next(
+                (exercise for exercise in exercises if exercise.get("slot_role") == slot_role),
+                None,
+            )
+
+        if target_exercise is None:
+            ex_idx = change.get("ex_idx", 0)
+            if isinstance(ex_idx, int) and ex_idx < len(exercises):
+                target_exercise = exercises[ex_idx]
+
+        if target_exercise is None:
+            return
+
+        if "s" in change:
+            target_exercise["sets"] = change["s"]
+        if "ev" in change:
+            target_exercise["effort_value"] = change["ev"]
+        if "rm" in change:
+            target_exercise["reps_min"] = change["rm"]
+        if "rx" in change:
+            target_exercise["reps_max"] = change["rx"]
+        if "rs" in change:
+            target_exercise["rest_seconds"] = change["rs"]
+        if "replace_candidate_id" in change:
+            replacement_id = normalize_exercise_id(change.get("replace_candidate_id"))
+            if replacement_id is not None:
+                target_exercise["exercise_id"] = replacement_id
 
     def _apply_deload(self, day: Dict[str, Any]) -> None:
         """
@@ -763,7 +1137,9 @@ class AIWorkoutGenerator:
                                 "effort_type": ex.get("et", "RIR"),
                                 "effort_value": ex.get("ev", 2),
                                 "tempo": ex.get("t"),
-                                "notes": ex.get("nt", "")
+                                "notes": ex.get("nt", ""),
+                                "slot_role": ex.get("sr"),
+                                "slot_candidate_ids": ex.get("sc"),
                             }
                             day["exercises"].append(exercise)
 
@@ -795,17 +1171,28 @@ class AIWorkoutGenerator:
         Genera una preview rápida (solo 1 semana) para que el usuario
         pueda ver cómo sería el programa antes de generar completo.
         """
-        # Modificar request temporalmente para solo 1 semana
         original_weeks = request.program_duration.total_weeks
+        original_meso_weeks = request.program_duration.mesocycle_weeks
         request.program_duration.total_weeks = 1
         request.program_duration.mesocycle_weeks = 1
 
         try:
-            result = await self.generate_workout(request, available_exercises)
-            return result
+            if settings.AI_USE_PROMPT_CACHING:
+                return await self._generate_with_caching(
+                    request,
+                    available_exercises,
+                    generation_scope="preview",
+                    slot_catalog_result=self._flat_only_slot_catalog(available_exercises),
+                )
+            return await self._generate_legacy(
+                request,
+                available_exercises,
+                generation_scope="preview",
+                slot_catalog_result=self._flat_only_slot_catalog(available_exercises),
+            )
         finally:
-            # Restaurar valores originales
             request.program_duration.total_weeks = original_weeks
+            request.program_duration.mesocycle_weeks = original_meso_weeks
 
     def _parse_response(self, raw_content: str) -> Optional[Dict[str, Any]]:
         """
@@ -872,9 +1259,9 @@ class AIWorkoutGenerator:
             for micro in meso.get("microcycles", []):
                 for day in micro.get("training_days", []):
                     for exercise in day.get("exercises", []):
-                        ex_id = exercise.get("exercise_id", "")
+                        ex_id = normalize_exercise_id(exercise.get("exercise_id"))
                         if ex_id and ex_id not in valid_exercise_ids:
-                            invalid_exercises.append(exercise.get("exercise_name", ex_id))
+                            invalid_exercises.append(exercise.get("exercise_name", str(ex_id)))
 
         if invalid_exercises:
             unique_invalid = list(set(invalid_exercises))
@@ -977,28 +1364,48 @@ class ExerciseMapper:
 
     def __init__(self, exercises: List[Dict[str, Any]]):
         self.exercises = exercises
-        self.by_id = {ex["id"]: ex for ex in exercises}
+        self.by_id = {normalize_exercise_id(ex["id"]): ex for ex in exercises}
         self.by_name = {ex["name"].lower(): ex for ex in exercises}
         self.mapped_count = 0  # Contador de ejercicios remapeados
         self.unmapped_exercises: List[str] = []  # Ejercicios que no se pudieron mapear
 
-    def find_best_match(self, exercise_name: str, muscle_group: Optional[str] = None) -> Optional[Dict]:
+    def find_best_match(
+        self,
+        exercise_name: str,
+        muscle_group: Optional[str] = None,
+        candidate_ids: Optional[List[int]] = None,
+    ) -> Optional[Dict]:
         """
         Busca el mejor ejercicio que coincida con el nombre dado.
         """
         name_lower = exercise_name.lower()
+        allowed_ids = {
+            normalize_exercise_id(candidate_id)
+            for candidate_id in (candidate_ids or [])
+            if normalize_exercise_id(candidate_id) is not None
+        }
+        candidate_pool = self.exercises
+        if allowed_ids:
+            candidate_pool = [
+                exercise for exercise in self.exercises
+                if normalize_exercise_id(exercise.get("id")) in allowed_ids
+            ]
 
         # Búsqueda exacta
         if name_lower in self.by_name:
-            return self.by_name[name_lower]
+            exact = self.by_name[name_lower]
+            if not allowed_ids or normalize_exercise_id(exact.get("id")) in allowed_ids:
+                return exact
 
         # Búsqueda parcial
         matches = []
-        for ex in self.exercises:
+        for ex in candidate_pool:
             ex_name = ex["name"].lower()
             if name_lower in ex_name or ex_name in name_lower:
                 score = len(set(name_lower.split()) & set(ex_name.split()))
-                if muscle_group and ex.get("muscle_group") == muscle_group:
+                if muscle_group and muscle_group in {muscle.lower() for muscle in ex.get("primary_muscles", [])}:
+                    score += 2
+                if allowed_ids:
                     score += 2
                 matches.append((score, ex))
 
@@ -1007,6 +1414,16 @@ class ExerciseMapper:
             return matches[0][1]
 
         return None
+
+    def _slot_candidate_ids(self, exercise: Dict[str, Any]) -> List[int]:
+        return [
+            candidate_id
+            for candidate_id in (
+                normalize_exercise_id(candidate_id)
+                for candidate_id in (exercise.get("slot_candidate_ids") or [])
+            )
+            if candidate_id is not None
+        ]
 
     def map_exercises_in_program(self, macrocycle: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1020,12 +1437,14 @@ class ExerciseMapper:
             for micro in meso.get("microcycles", []):
                 for day in micro.get("training_days", []):
                     for exercise in day.get("exercises", []):
-                        ex_id = exercise.get("exercise_id")
+                        ex_id = normalize_exercise_id(exercise.get("exercise_id"))
 
                         # Si el ID no es válido, buscar por nombre
                         if ex_id not in self.by_id:
                             ex_name = exercise.get("exercise_name", "")
                             focus = day.get("focus", "").lower()
+                            slot_role = exercise.get("slot_role")
+                            slot_candidate_ids = self._slot_candidate_ids(exercise)
 
                             # Determinar grupo muscular del contexto
                             muscle = None
@@ -1034,13 +1453,26 @@ class ExerciseMapper:
                                     muscle = mg
                                     break
 
-                            match = self.find_best_match(ex_name, muscle)
+                            match = None
+                            if slot_candidate_ids:
+                                match = self.find_best_match(ex_name, muscle, candidate_ids=slot_candidate_ids)
+                            if match is None and slot_role:
+                                slot_scoped_ids = [
+                                    normalize_exercise_id(candidate.get("id"))
+                                    for candidate in self.exercises
+                                    if infer_slot_role(candidate) == slot_role
+                                ]
+                                slot_scoped_ids = [candidate_id for candidate_id in slot_scoped_ids if candidate_id is not None]
+                                if slot_scoped_ids:
+                                    match = self.find_best_match(ex_name, muscle, candidate_ids=slot_scoped_ids)
+                            if match is None:
+                                match = self.find_best_match(ex_name, muscle)
                             if match:
                                 logger.debug(
                                     f"Remapeando ejercicio: '{ex_name}' (ID: {ex_id}) "
                                     f"-> '{match['name']}' (ID: {match['id']})"
                                 )
-                                exercise["exercise_id"] = match["id"]
+                                exercise["exercise_id"] = normalize_exercise_id(match["id"])
                                 exercise["exercise_name"] = match["name"]
                                 self.mapped_count += 1
                             else:
