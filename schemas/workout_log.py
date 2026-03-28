@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from datetime import datetime, date
 from typing import Optional, List, Literal
 from models.workout_log import WorkoutStatus, AbandonReason
@@ -13,6 +13,15 @@ def _stringify_id(value: object) -> str | None:
 
 # =============== ExerciseSetLog Schemas ===============
 
+class ExerciseSetSegmentPayload(BaseModel):
+    segment_index: int = Field(ge=1, le=20, description="Segment order inside the set")
+    reps_completed: int = Field(ge=0, le=100, description="Reps completed in this segment")
+    weight_kg: Optional[float] = Field(None, ge=0, le=1000, description="Weight used in kg")
+    effort_value: Optional[float] = Field(None, ge=0, le=10, description="RIR/RPE value recorded")
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ExerciseSetLogBase(BaseModel):
     day_exercise_id: str
     set_number: int = Field(ge=1, le=20, description="Set number (1, 2, 3...)")
@@ -21,13 +30,47 @@ class ExerciseSetLogBase(BaseModel):
     effort_value: Optional[float] = Field(None, ge=0, le=10, description="RIR/RPE value recorded")
 
 
-class ExerciseSetLogCreate(ExerciseSetLogBase):
+class ExerciseSetLogCreate(BaseModel):
+    day_exercise_id: str
+    set_number: int = Field(ge=1, le=20, description="Set number (1, 2, 3...)")
+    reps_completed: Optional[int] = Field(None, ge=0, le=100, description="Legacy single-segment reps")
+    weight_kg: Optional[float] = Field(None, ge=0, le=1000, description="Legacy single-segment weight")
+    effort_value: Optional[float] = Field(None, ge=0, le=10, description="Legacy single-segment effort")
+    segments: Optional[List[ExerciseSetSegmentPayload]] = None
+
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> "ExerciseSetLogCreate":
+        uses_segments = self.segments is not None
+        uses_legacy_fields = any(
+            value is not None
+            for value in (self.reps_completed, self.weight_kg, self.effort_value)
+        )
+
+        if uses_segments and uses_legacy_fields:
+            raise ValueError("Use either segments[] or legacy top-level set values, not both")
+
+        if uses_segments:
+            if not self.segments:
+                raise ValueError("segments must contain at least one segment")
+
+            sorted_indices = sorted(segment.segment_index for segment in self.segments)
+            expected_indices = list(range(1, len(self.segments) + 1))
+            if sorted_indices != expected_indices:
+                raise ValueError("segments must use unique contiguous segment_index values starting at 1")
+            return self
+
+        if self.reps_completed is None:
+            raise ValueError("reps_completed is required when segments are not provided")
+
+        return self
 
 
 class ExerciseSetLogResponse(ExerciseSetLogBase):
     id: str
     workout_log_id: str
+    segment_index: int
     completed_at: datetime
 
     @field_validator("id", "workout_log_id", "day_exercise_id", mode="before")
@@ -35,8 +78,25 @@ class ExerciseSetLogResponse(ExerciseSetLogBase):
     def serialize_ids(cls, value: object) -> str | None:
         return _stringify_id(value)
 
+    @field_validator("segment_index", mode="before")
+    @classmethod
+    def normalize_segment_index(cls, value: object) -> int:
+        if value is None:
+            return 1
+        return int(value)
+
     class Config:
         from_attributes = True
+
+
+class ExerciseSetGroupResponse(BaseModel):
+    day_exercise_id: str
+    set_number: int
+    segment_count: int
+    total_reps_completed: int
+    best_weight_kg: Optional[float] = None
+    completed_at: Optional[datetime] = None
+    segments: List[ExerciseSetLogResponse] = []
 
 
 # =============== WorkoutLog Schemas ===============
@@ -130,7 +190,7 @@ class ExerciseProgress(BaseModel):
     total_sets: int
     completed_sets: int
     is_completed: bool
-    sets_data: List[ExerciseSetLogResponse] = []
+    sets_data: List[ExerciseSetGroupResponse] = []
 
 
 class CurrentWorkoutState(BaseModel):

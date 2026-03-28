@@ -62,13 +62,24 @@ class WorkoutLog(Base):
 
 class ExerciseSetLog(Base):
     __tablename__ = "exercise_set_logs"
-    __table_args__ = {"schema": "training"}
+    __table_args__ = (
+        Index(
+            "uq_training_exercise_set_logs_workout_day_set_segment",
+            "workout_log_id",
+            "day_exercise_id",
+            "set_number",
+            "segment_index",
+            unique=True,
+        ),
+        {"schema": "training"},
+    )
 
     id = Column(BigInteger, primary_key=True)
     workout_log_id = Column(BigInteger, ForeignKey("training.workout_logs.id"), nullable=False, index=True)
     exercise_id = Column(Integer, ForeignKey("training.exercises.id"), nullable=False)
     day_exercise_id = Column(Integer, ForeignKey("training.day_exercises.id"), nullable=True, index=True)
     set_number = Column(Integer, nullable=True)
+    segment_index = Column(Integer, nullable=False, default=1)
     reps_completed = Column("reps", Integer, nullable=True)
     weight_kg = Column(Float, nullable=True)
     effort_value = Column("rpe", Float, nullable=True)

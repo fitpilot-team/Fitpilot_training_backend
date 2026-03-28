@@ -589,6 +589,14 @@ DDL_STATEMENTS: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_training_day_exercises_day_order ON training.day_exercises (training_day_id, order_index);",
     "CREATE INDEX IF NOT EXISTS idx_training_workout_logs_performed_on_date ON training.workout_logs (performed_on_date);",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_workout_logs_authoritative_client_training_day ON training.workout_logs (client_id, training_day_id) WHERE is_authoritative = TRUE;",
+    "ALTER TABLE training.exercise_set_logs ADD COLUMN IF NOT EXISTS segment_index INTEGER;",
+    "UPDATE training.exercise_set_logs SET segment_index = 1 WHERE segment_index IS NULL;",
+    "ALTER TABLE training.exercise_set_logs ALTER COLUMN segment_index SET DEFAULT 1;",
+    "ALTER TABLE training.exercise_set_logs ALTER COLUMN segment_index SET NOT NULL;",
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_training_exercise_set_logs_workout_day_set_segment
+        ON training.exercise_set_logs (workout_log_id, day_exercise_id, set_number, segment_index);
+    """,
     """
     CREATE TABLE IF NOT EXISTS training.client_workout_analytics_preferences (
         client_id INTEGER PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,

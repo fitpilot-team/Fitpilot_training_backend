@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from core.dependencies import (
@@ -32,7 +32,9 @@ from schemas.workout_log import (
     DayProgress,
     ExerciseProgress,
     ExerciseSetLogCreate,
+    ExerciseSetGroupResponse,
     ExerciseSetLogResponse,
+    ExerciseSetSegmentPayload,
     MicrocycleDayProgress,
     MicrocycleProgressResponse,
     MicrocycleSessionProgress,
@@ -52,10 +54,71 @@ from schemas.workout_log import (
 router = APIRouter()
 
 PHASE_ORDER = {"warmup": 0, "main": 1, "cooldown": 2}
+REQUIRED_EXERCISE_SET_LOG_COLUMNS = ("segment_index",)
+EXERCISE_SET_LOGS_SCHEMA_ERROR_DETAIL = (
+    "Training schema mismatch: training.exercise_set_logs.segment_index is missing. "
+    "Run scripts/upgrade_training_schema_shared_db.py --apply against the target database "
+    "and restart the training backend."
+)
 
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _extract_scalar_row_value(row: object) -> object:
+    if row is None:
+        return None
+    if isinstance(row, tuple):
+        return row[0] if row else None
+    mapping = getattr(row, "_mapping", None)
+    if mapping:
+        if "column_name" in mapping:
+            return mapping["column_name"]
+        values = list(mapping.values())
+        return values[0] if values else None
+    return getattr(row, "column_name", row)
+
+
+def assert_exercise_set_logs_schema_compatibility(db: Session) -> None:
+    execute = getattr(db, "execute", None)
+    if not callable(execute):
+        return
+
+    result = execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'training'
+              AND table_name = 'exercise_set_logs'
+              AND column_name IN ('segment_index')
+            """
+        )
+    )
+
+    if hasattr(result, "all"):
+        rows = result.all()
+    elif hasattr(result, "fetchall"):
+        rows = result.fetchall()
+    else:
+        rows = list(result or [])
+
+    available_columns = {
+        str(value)
+        for value in (_extract_scalar_row_value(row) for row in rows)
+        if value is not None
+    }
+    missing_columns = [
+        column_name
+        for column_name in REQUIRED_EXERCISE_SET_LOG_COLUMNS
+        if column_name not in available_columns
+    ]
+    if missing_columns:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=EXERCISE_SET_LOGS_SCHEMA_ERROR_DETAIL,
+        )
 
 
 def parse_int_id(raw_id: str | int, field_name: str) -> int:
@@ -104,6 +167,11 @@ def normalize_workout_log_defaults(workout_log: WorkoutLog | object) -> None:
 
     if getattr(workout_log, "exercise_sets", None) is None:
         setattr(workout_log, "exercise_sets", [])
+        return
+
+    for set_log in getattr(workout_log, "exercise_sets", []) or []:
+        if getattr(set_log, "segment_index", None) is None:
+            setattr(set_log, "segment_index", 1)
 
 
 def serialize_training_day(training_day: TrainingDay) -> TrainingDayResponse:
@@ -117,6 +185,108 @@ def serialize_workout_log(workout_log: WorkoutLog) -> WorkoutLogResponse:
 
 def serialize_set_log(set_log: ExerciseSetLog) -> ExerciseSetLogResponse:
     return ExerciseSetLogResponse.model_validate(set_log)
+
+
+def get_set_number(set_log: ExerciseSetLog | object) -> int:
+    raw_value = getattr(set_log, "set_number", None)
+    return int(raw_value or 0)
+
+
+def get_segment_index(set_log: ExerciseSetLog | object) -> int:
+    raw_value = getattr(set_log, "segment_index", None)
+    return int(raw_value or 1)
+
+
+def sort_set_logs(left: ExerciseSetLog | object, right: ExerciseSetLog | object) -> int:
+    left_key = (
+        get_set_number(left),
+        get_segment_index(left),
+        getattr(left, "completed_at", None) or datetime.min,
+        getattr(left, "id", 0) or 0,
+    )
+    right_key = (
+        get_set_number(right),
+        get_segment_index(right),
+        getattr(right, "completed_at", None) or datetime.min,
+        getattr(right, "id", 0) or 0,
+    )
+    return (left_key > right_key) - (left_key < right_key)
+
+
+def sort_set_logs_key(set_log: ExerciseSetLog | object) -> tuple[int, int, datetime, int]:
+    return (
+        get_set_number(set_log),
+        get_segment_index(set_log),
+        getattr(set_log, "completed_at", None) or datetime.min,
+        int(getattr(set_log, "id", 0) or 0),
+    )
+
+
+def group_set_logs_by_set_number(
+    set_logs: list[ExerciseSetLog | object],
+) -> dict[int, list[ExerciseSetLog | object]]:
+    grouped: dict[int, list[ExerciseSetLog | object]] = defaultdict(list)
+    for set_log in set_logs:
+        set_number = get_set_number(set_log)
+        if set_number < 1:
+            continue
+        grouped[set_number].append(set_log)
+
+    for group in grouped.values():
+        group.sort(key=sort_set_logs_key)
+
+    return grouped
+
+
+def count_contiguous_completed_sets(set_numbers: set[int], total_sets: int) -> int:
+    completed_sets = 0
+    while completed_sets < total_sets and (completed_sets + 1) in set_numbers:
+        completed_sets += 1
+    return completed_sets
+
+
+def build_set_group_response(
+    set_logs: list[ExerciseSetLog | object],
+) -> ExerciseSetGroupResponse:
+    if not set_logs:
+        raise ValueError("set_logs must not be empty")
+
+    ordered_logs = sorted(set_logs, key=sort_set_logs_key)
+    first_log = ordered_logs[0]
+    completed_candidates = [
+        getattr(set_log, "completed_at", None)
+        for set_log in ordered_logs
+        if getattr(set_log, "completed_at", None) is not None
+    ]
+    weight_candidates = [
+        float(getattr(set_log, "weight_kg", 0))
+        for set_log in ordered_logs
+        if getattr(set_log, "weight_kg", None) is not None
+    ]
+
+    return ExerciseSetGroupResponse(
+        day_exercise_id=str(getattr(first_log, "day_exercise_id")),
+        set_number=get_set_number(first_log),
+        segment_count=len(ordered_logs),
+        total_reps_completed=sum(int(getattr(set_log, "reps_completed", 0) or 0) for set_log in ordered_logs),
+        best_weight_kg=max(weight_candidates) if weight_candidates else None,
+        completed_at=max(completed_candidates) if completed_candidates else None,
+        segments=[serialize_set_log(set_log) for set_log in ordered_logs],
+    )
+
+
+def resolve_set_segments_payload(set_data: ExerciseSetLogCreate) -> list[ExerciseSetSegmentPayload]:
+    if set_data.segments is not None:
+        return list(sorted(set_data.segments, key=lambda segment: segment.segment_index))
+
+    return [
+        ExerciseSetSegmentPayload(
+            segment_index=1,
+            reps_completed=int(set_data.reps_completed or 0),
+            weight_kg=set_data.weight_kg,
+            effort_value=set_data.effort_value,
+        )
+    ]
 
 
 def get_active_macrocycle(db: Session, client_id: int) -> Macrocycle | None:
@@ -189,6 +359,7 @@ def verify_training_day_access(db: Session, training_day_id: int, current_user: 
 
 
 def get_workout_log_or_404(db: Session, workout_log_id: int) -> WorkoutLog:
+    assert_exercise_set_logs_schema_compatibility(db)
     query = db.query(WorkoutLog)
     if hasattr(query, "options"):
         query = query.options(
@@ -334,6 +505,7 @@ def get_authoritative_logs_for_training_days(
     if not training_day_ids:
         return {}
 
+    assert_exercise_set_logs_schema_compatibility(db)
     query = db.query(WorkoutLog)
     if hasattr(query, "options"):
         query = query.options(joinedload(WorkoutLog.exercise_sets))
@@ -386,13 +558,26 @@ def get_completed_set_counts(db: Session, *, workout_log_ids: list[int]) -> dict
     if not workout_log_ids:
         return {}
 
-    rows = (
-        db.query(ExerciseSetLog.workout_log_id, func.count(ExerciseSetLog.id))
+    assert_exercise_set_logs_schema_compatibility(db)
+    set_logs = (
+        db.query(ExerciseSetLog)
         .filter(ExerciseSetLog.workout_log_id.in_(workout_log_ids))
-        .group_by(ExerciseSetLog.workout_log_id)
         .all()
     )
-    return {int(workout_log_id): int(count) for workout_log_id, count in rows}
+
+    grouped_pairs: dict[int, set[tuple[int, int]]] = defaultdict(set)
+    for set_log in set_logs:
+        workout_log_id = getattr(set_log, "workout_log_id", None)
+        day_exercise_id = getattr(set_log, "day_exercise_id", None)
+        set_number = getattr(set_log, "set_number", None)
+        if workout_log_id is None or day_exercise_id is None or set_number is None:
+            continue
+        grouped_pairs[int(workout_log_id)].add((int(day_exercise_id), int(set_number)))
+
+    return {
+        workout_log_id: len(completed_pairs)
+        for workout_log_id, completed_pairs in grouped_pairs.items()
+    }
 
 
 def get_ordered_exercises_for_training_day(training_day: TrainingDay) -> list[DayExercise]:
@@ -435,12 +620,10 @@ def build_exercise_progress(training_day: TrainingDay, workout_log: WorkoutLog) 
 
     exercise_progress: list[ExerciseProgress] = []
     for day_exercise in get_ordered_exercises_for_training_day(training_day):
-        set_logs = sorted(
-            set_logs_by_day_exercise.get(int(day_exercise.id), []),
-            key=lambda item: (getattr(item, "set_number", 0) or 0, getattr(item, "id", 0)),
-        )
-        completed_sets = len(set_logs)
+        set_logs = sorted(set_logs_by_day_exercise.get(int(day_exercise.id), []), key=sort_set_logs_key)
+        grouped_set_logs = group_set_logs_by_set_number(set_logs)
         total_sets = int(day_exercise.sets or 0)
+        completed_sets = count_contiguous_completed_sets(set(grouped_set_logs.keys()), total_sets)
         exercise_progress.append(
             ExerciseProgress(
                 day_exercise_id=str(day_exercise.id),
@@ -448,7 +631,10 @@ def build_exercise_progress(training_day: TrainingDay, workout_log: WorkoutLog) 
                 total_sets=total_sets,
                 completed_sets=completed_sets,
                 is_completed=(total_sets > 0 and completed_sets >= total_sets),
-                sets_data=[serialize_set_log(set_log) for set_log in set_logs],
+                sets_data=[
+                    build_set_group_response(grouped_set_logs[set_number])
+                    for set_number in sorted(grouped_set_logs.keys())
+                ],
             )
         )
     return exercise_progress
@@ -1151,7 +1337,7 @@ def reopen_workout_log(
     return serialize_workout_log(workout_log)
 
 
-@router.post("/{workout_log_id}/sets", response_model=ExerciseSetLogResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{workout_log_id}/sets", response_model=ExerciseSetGroupResponse, status_code=status.HTTP_201_CREATED)
 def log_exercise_set(
     workout_log_id: int,
     set_data: ExerciseSetLogCreate,
@@ -1183,43 +1369,45 @@ def log_exercise_set(
         )
 
     try:
-        existing_set = (
+        existing_sets = (
             db.query(ExerciseSetLog)
             .filter(
                 ExerciseSetLog.workout_log_id == workout_log.id,
                 ExerciseSetLog.day_exercise_id == day_exercise_id,
                 ExerciseSetLog.set_number == set_data.set_number,
             )
-            .first()
+            .all()
         )
     except AssertionError:
-        existing_set = None
+        existing_sets = []
 
-    if existing_set:
+    if existing_sets:
         response.status_code = status.HTTP_200_OK
-        existing_set.reps_completed = set_data.reps_completed
-        existing_set.weight_kg = set_data.weight_kg
-        existing_set.effort_value = set_data.effort_value
-        existing_set.exercise_id = day_exercise.exercise_id
-        existing_set.completed_at = utc_now()
-        db.commit()
-        db.refresh(existing_set)
-        return serialize_set_log(existing_set)
+        for existing_set in existing_sets:
+            db.delete(existing_set)
 
-    set_log = ExerciseSetLog(
-        workout_log_id=workout_log.id,
-        exercise_id=day_exercise.exercise_id,
-        day_exercise_id=day_exercise_id,
-        set_number=set_data.set_number,
-        reps_completed=set_data.reps_completed,
-        weight_kg=set_data.weight_kg,
-        effort_value=set_data.effort_value,
-        completed_at=utc_now(),
-    )
-    db.add(set_log)
+    timestamp = utc_now()
+    created_segments: list[ExerciseSetLog] = []
+    for segment in resolve_set_segments_payload(set_data):
+        set_log = ExerciseSetLog(
+            workout_log_id=workout_log.id,
+            exercise_id=day_exercise.exercise_id,
+            day_exercise_id=day_exercise_id,
+            set_number=set_data.set_number,
+            segment_index=segment.segment_index,
+            reps_completed=segment.reps_completed,
+            weight_kg=segment.weight_kg,
+            effort_value=segment.effort_value,
+            completed_at=timestamp,
+        )
+        db.add(set_log)
+        created_segments.append(set_log)
+
     db.commit()
-    db.refresh(set_log)
-    return serialize_set_log(set_log)
+    for created_segment in created_segments:
+        db.refresh(created_segment)
+
+    return build_set_group_response(created_segments)
 
 
 @router.patch("/{workout_log_id}/sets/{set_log_id}", response_model=ExerciseSetLogResponse)
@@ -1295,5 +1483,48 @@ def delete_exercise_set(
         )
 
     db.delete(set_log)
+    db.commit()
+    return None
+
+
+@router.delete(
+    "/{workout_log_id}/day-exercises/{day_exercise_id}/sets/{set_number}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_exercise_set_group(
+    workout_log_id: int,
+    day_exercise_id: int,
+    set_number: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workout_log = verify_workout_log_access(db, workout_log_id, current_user)
+    if get_effective_user_role(current_user) == "client":
+        verify_workout_log_ownership(workout_log, current_user)
+
+    if enum_value(workout_log.status) != WorkoutStatus.IN_PROGRESS.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Workout must be reopened before editing sets",
+        )
+
+    set_logs = (
+        db.query(ExerciseSetLog)
+        .filter(
+            ExerciseSetLog.workout_log_id == workout_log.id,
+            ExerciseSetLog.day_exercise_id == day_exercise_id,
+            ExerciseSetLog.set_number == set_number,
+        )
+        .all()
+    )
+    if not set_logs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Exercise set group with day_exercise_id={day_exercise_id} and set_number={set_number} not found",
+        )
+
+    for set_log in set_logs:
+        db.delete(set_log)
+
     db.commit()
     return None
