@@ -23,6 +23,7 @@ from models.mesocycle import (
     Microcycle,
     TrainingDay,
 )
+from models.exercise import Exercise, ExerciseClass
 from models.user import User
 from models.workout_log import ExerciseSetLog, WorkoutLog, WorkoutStatus
 from schemas.mesocycle import TrainingDayResponse
@@ -611,6 +612,45 @@ def resolve_exercise_name(day_exercise: DayExercise) -> str:
     return exercise.name_es or exercise.name_en
 
 
+def is_cardio_day_exercise(day_exercise: DayExercise) -> bool:
+    """Matches frontend isCardioExercise logic."""
+    if not day_exercise:
+        return False
+    
+    exercise = getattr(day_exercise, "exercise", None)
+    if exercise:
+        if exercise.exercise_class == ExerciseClass.CARDIO:
+            return True
+        if getattr(exercise, "cardio_subclass", None):
+            return True
+            
+    return any([
+        day_exercise.duration_seconds is not None,
+        day_exercise.intensity_zone is not None,
+        day_exercise.distance_meters is not None,
+        day_exercise.target_calories is not None,
+        day_exercise.intervals is not None,
+        day_exercise.work_seconds is not None,
+        day_exercise.interval_rest_seconds is not None,
+    ])
+
+
+def get_cardio_effective_sets(day_exercise: DayExercise) -> int:
+    """Matches frontend getCardioEffectiveSets logic."""
+    if not day_exercise:
+        return 1
+        
+    sets = day_exercise.sets or 1
+    has_intervals = (day_exercise.intervals or 0) > 0
+    
+    # HIIT with intervals: each "set" is a round of intervals
+    if has_intervals and sets > 1:
+        return sets
+        
+    # Steady-state cardio: always 1 continuous block
+    return 1
+
+
 def build_exercise_progress(training_day: TrainingDay, workout_log: WorkoutLog) -> list[ExerciseProgress]:
     set_logs_by_day_exercise: dict[int, list[ExerciseSetLog]] = defaultdict(list)
     for set_log in workout_log.exercise_sets or []:
@@ -622,7 +662,13 @@ def build_exercise_progress(training_day: TrainingDay, workout_log: WorkoutLog) 
     for day_exercise in get_ordered_exercises_for_training_day(training_day):
         set_logs = sorted(set_logs_by_day_exercise.get(int(day_exercise.id), []), key=sort_set_logs_key)
         grouped_set_logs = group_set_logs_by_set_number(set_logs)
-        total_sets = int(day_exercise.sets or 0)
+        
+        # Calculate total sets considering cardio specific logic
+        if is_cardio_day_exercise(day_exercise):
+            total_sets = get_cardio_effective_sets(day_exercise)
+        else:
+            total_sets = int(day_exercise.sets or 0)
+            
         completed_sets = count_contiguous_completed_sets(set(grouped_set_logs.keys()), total_sets)
         exercise_progress.append(
             ExerciseProgress(
