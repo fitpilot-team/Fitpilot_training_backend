@@ -35,6 +35,7 @@ if "redis.exceptions" not in sys.modules:
 
 from api.routers.workout_analytics import (  # noqa: E402
     RepRangeValidationError,
+    build_calendar_week,
     build_dashboard_response,
     build_recent_history,
     build_exercise_detail_series,
@@ -162,6 +163,56 @@ def test_build_dashboard_response_aggregates_volume_and_ignores_unweighted_sets(
     assert weekly_points["2026-03-09"]["range_2"] == 495.0
     assert weekly_points["2026-03-16"]["range_1"] == 500.0
     assert weekly_points["2026-03-16"]["range_2"] == 640.0
+    assert len(response.calendar_week) == 7
+    assert response.calendar_week[0].date == date(2026, 3, 16)
+    assert response.calendar_week[3].status == "completed"
+    assert response.calendar_week[3].sessions_count == 1
+    assert response.calendar_week[5].is_today is True
+
+
+def test_build_dashboard_response_respects_anchor_date_for_history_and_summary() -> None:
+    rep_ranges = default_rep_ranges()
+    logs = [
+        make_log(
+            log_id=41,
+            performed_on=date(2026, 3, 28),
+            started_at=datetime(2026, 3, 28, 8, 0, 0),
+            completed_at=datetime(2026, 3, 28, 9, 0, 0),
+            status="completed",
+            training_day_name="Posterior",
+            exercises_count=2,
+            sets=[make_set(exercise_id=1, reps=5, weight=120)],
+        ),
+        make_log(
+            log_id=40,
+            performed_on=date(2026, 3, 24),
+            started_at=datetime(2026, 3, 24, 8, 0, 0),
+            completed_at=datetime(2026, 3, 24, 8, 45, 0),
+            status="completed",
+            training_day_name="Torso A",
+            exercises_count=1,
+            sets=[make_set(exercise_id=1, reps=6, weight=90)],
+        ),
+    ]
+
+    response = build_dashboard_response(
+        workout_logs=logs,
+        rep_ranges=rep_ranges,
+        range_key="12w",
+        exercise_names={1: "Peso muerto"},
+        anchor_date=date(2026, 3, 24),
+        today=date(2026, 3, 31),
+    )
+
+    assert response.summary.total_sessions == 1
+    assert response.summary.sessions_in_range == 1
+    assert response.summary.total_volume_kg == 540.0
+    assert [item.workout_log_id for item in response.recent_history] == ["40"]
+    assert response.calendar_week[1].date == date(2026, 3, 24)
+    assert response.calendar_week[1].status == "completed"
+    assert response.calendar_week[5].status == "completed"
+    assert response.calendar_week[5].sessions_count == 1
+    assert all(item.performed_on_date <= date(2026, 3, 24) for item in response.recent_history)
 
 
 def test_build_exercise_detail_series_tracks_personal_best_and_dominant_bucket() -> None:
@@ -252,3 +303,59 @@ def test_recent_history_supports_status_filter_and_pagination() -> None:
     assert len(paged_history) == 1
     assert paged_history[0].workout_log_id == "32"
     assert paged_history[0].training_day_name == "Empuje"
+
+
+def test_build_calendar_week_uses_status_priority_and_counts_sessions() -> None:
+    logs = [
+        make_log(
+            log_id=50,
+            performed_on=date(2026, 3, 30),
+            started_at=datetime(2026, 3, 30, 7, 0, 0),
+            completed_at=None,
+            status="in_progress",
+            training_day_name="Torso A",
+            exercises_count=2,
+            sets=[],
+        ),
+        make_log(
+            log_id=51,
+            performed_on=date(2026, 3, 30),
+            started_at=datetime(2026, 3, 30, 18, 0, 0),
+            completed_at=datetime(2026, 3, 30, 18, 50, 0),
+            status="completed",
+            training_day_name="Torso B",
+            exercises_count=2,
+            sets=[],
+        ),
+        make_log(
+            log_id=52,
+            performed_on=date(2026, 4, 1),
+            started_at=datetime(2026, 4, 1, 8, 0, 0),
+            completed_at=datetime(2026, 4, 1, 8, 10, 0),
+            status="abandoned",
+            training_day_name="Pierna",
+            exercises_count=1,
+            sets=[],
+        ),
+    ]
+
+    week = build_calendar_week(
+        workout_logs=logs,
+        anchor_date=date(2026, 3, 31),
+        today=date(2026, 3, 31),
+    )
+
+    assert [day.date for day in week] == [
+        date(2026, 3, 30),
+        date(2026, 3, 31),
+        date(2026, 4, 1),
+        date(2026, 4, 2),
+        date(2026, 4, 3),
+        date(2026, 4, 4),
+        date(2026, 4, 5),
+    ]
+    assert week[0].status == "completed"
+    assert week[0].sessions_count == 2
+    assert week[1].is_today is True
+    assert week[2].status == "abandoned"
+    assert week[2].sessions_count == 1

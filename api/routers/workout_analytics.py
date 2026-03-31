@@ -15,6 +15,7 @@ from models.user import User
 from models.workout_analytics import ClientWorkoutAnalyticsPreference
 from models.workout_log import ExerciseSetLog, WorkoutLog
 from schemas.workout_analytics import (
+    WorkoutAnalyticsCalendarWeekDayResponse,
     ExerciseTrendDetailResponse,
     ExerciseTrendDetailSummaryResponse,
     ExerciseTrendPointResponse,
@@ -44,6 +45,11 @@ DEFAULT_REP_RANGES: list[dict[str, Any]] = [
 RANGE_TO_WEEKS = {"4w": 4, "8w": 8, "12w": 12, "24w": 24}
 MAX_RECENT_HISTORY_ITEMS = 12
 DEFAULT_HISTORY_PAGE_SIZE = 20
+WORKOUT_CALENDAR_STATUS_PRIORITY = {
+    "completed": 3,
+    "in_progress": 2,
+    "abandoned": 1,
+}
 
 
 class RepRangeValidationError(ValueError):
@@ -180,6 +186,14 @@ def resolve_range_start(range_key: WorkoutAnalyticsRange, today: date | None = N
     return reference_date - timedelta(days=(weeks * 7) - 1)
 
 
+def resolve_reference_date(anchor_date: date | None, today: date | None = None) -> date:
+    actual_today = today or utc_today()
+    if anchor_date is None:
+        return actual_today
+
+    return min(anchor_date, actual_today)
+
+
 def get_log_performed_date(workout_log: WorkoutLog | Any) -> date:
     performed_on_date = getattr(workout_log, "performed_on_date", None)
     if performed_on_date:
@@ -200,6 +214,17 @@ def filter_logs_in_range(
         return list(workout_logs)
 
     return [workout_log for workout_log in workout_logs if get_log_performed_date(workout_log) >= range_start]
+
+
+def filter_logs_up_to_date(
+    workout_logs: Iterable[WorkoutLog | Any],
+    reference_date: date,
+) -> list[WorkoutLog | Any]:
+    return [
+        workout_log
+        for workout_log in workout_logs
+        if get_log_performed_date(workout_log) <= reference_date
+    ]
 
 
 def filter_workout_logs_by_status(
@@ -320,6 +345,20 @@ def get_week_start(day_value: date) -> date:
     return day_value - timedelta(days=day_value.weekday())
 
 
+def resolve_calendar_day_status(workout_logs: Sequence[WorkoutLog | Any]) -> str:
+    highest_priority = 0
+    resolved_status = "none"
+
+    for workout_log in workout_logs:
+        status = stringify_enum(getattr(workout_log, "status", ""))
+        priority = WORKOUT_CALENDAR_STATUS_PRIORITY.get(status, 0)
+        if priority > highest_priority:
+            highest_priority = priority
+            resolved_status = status
+
+    return resolved_status
+
+
 def build_recent_history(
     workout_logs: Sequence[WorkoutLog | Any],
     *,
@@ -348,6 +387,38 @@ def build_recent_history(
         )
 
     return history_items
+
+
+def build_calendar_week(
+    workout_logs: Sequence[WorkoutLog | Any],
+    anchor_date: date | None = None,
+    today: date | None = None,
+) -> list[WorkoutAnalyticsCalendarWeekDayResponse]:
+    reference_date = resolve_reference_date(anchor_date, today)
+    actual_today = today or utc_today()
+    week_start = get_week_start(reference_date)
+    week_end = week_start + timedelta(days=6)
+    authoritative_logs = [
+        workout_log
+        for workout_log in workout_logs
+        if getattr(workout_log, "is_authoritative", True)
+    ]
+    logs_by_date: dict[date, list[WorkoutLog | Any]] = defaultdict(list)
+
+    for workout_log in authoritative_logs:
+        performed_on = get_log_performed_date(workout_log)
+        if week_start <= performed_on <= week_end:
+            logs_by_date[performed_on].append(workout_log)
+
+    return [
+        WorkoutAnalyticsCalendarWeekDayResponse(
+            date=week_start + timedelta(days=offset),
+            status=resolve_calendar_day_status(logs_by_date.get(week_start + timedelta(days=offset), [])),
+            sessions_count=len(logs_by_date.get(week_start + timedelta(days=offset), [])),
+            is_today=(week_start + timedelta(days=offset)) == actual_today,
+        )
+        for offset in range(7)
+    ]
 
 
 def build_rep_range_chart(
@@ -569,17 +640,19 @@ def build_dashboard_response(
     rep_ranges: Sequence[dict[str, Any]],
     range_key: WorkoutAnalyticsRange,
     exercise_names: dict[int, str] | None = None,
+    anchor_date: date | None = None,
     today: date | None = None,
 ) -> WorkoutAnalyticsDashboardResponse:
-    reference_date = today or utc_today()
+    reference_date = resolve_reference_date(anchor_date, today)
     range_start = resolve_range_start(range_key, reference_date)
     authoritative_logs = [
         workout_log
         for workout_log in workout_logs
         if getattr(workout_log, "is_authoritative", True)
     ]
+    eligible_logs = filter_logs_up_to_date(authoritative_logs, reference_date)
     ordered_logs = sorted(
-        authoritative_logs,
+        eligible_logs,
         key=lambda workout_log: (get_log_performed_date(workout_log), getattr(workout_log, "id", 0)),
         reverse=True,
     )
@@ -602,6 +675,7 @@ def build_dashboard_response(
                 sum(duration_values) / len(duration_values) if duration_values else 0.0,
             ),
         ),
+        calendar_week=build_calendar_week(authoritative_logs, anchor_date=reference_date, today=today),
         rep_range_chart=build_rep_range_chart(filtered_logs, rep_ranges, range_start, reference_date),
         exercise_summaries=build_exercise_summaries(filtered_logs, exercise_names or {}),
         recent_history=build_recent_history(ordered_logs),
@@ -674,6 +748,7 @@ def update_my_workout_analytics_preferences(
 @router.get("/me/dashboard", response_model=WorkoutAnalyticsDashboardResponse)
 def get_my_workout_analytics_dashboard(
     range: WorkoutAnalyticsRange = Query("12w"),
+    anchor_date: date | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -685,6 +760,7 @@ def get_my_workout_analytics_dashboard(
         rep_ranges=preferences.rep_ranges,
         range_key=range,
         exercise_names=exercise_names,
+        anchor_date=anchor_date,
     )
 
 
@@ -694,11 +770,14 @@ def get_my_workout_analytics_history(
     status_filter: WorkoutAnalyticsHistoryStatusFilter = Query("all", alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(DEFAULT_HISTORY_PAGE_SIZE, ge=1, le=100),
+    anchor_date: date | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    reference_date = resolve_reference_date(anchor_date)
     workout_logs = fetch_client_workout_logs(db, current_user.id)
-    filtered_logs = filter_logs_in_range(workout_logs, resolve_range_start(range))
+    eligible_logs = filter_logs_up_to_date(workout_logs, reference_date)
+    filtered_logs = filter_logs_in_range(eligible_logs, resolve_range_start(range, reference_date))
     ordered_logs = sorted(
         filtered_logs,
         key=lambda workout_log: (get_log_performed_date(workout_log), getattr(workout_log, "id", 0)),
@@ -715,13 +794,16 @@ def get_my_workout_analytics_history(
 def get_my_exercise_trend_detail(
     exercise_id: int,
     range: WorkoutAnalyticsRange = Query("12w"),
+    anchor_date: date | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    reference_date = resolve_reference_date(anchor_date)
     preferences = get_or_create_preferences(db, current_user.id)
     exercise = get_exercise_or_404(db, exercise_id)
     workout_logs = fetch_client_workout_logs(db, current_user.id)
-    filtered_logs = filter_logs_in_range(workout_logs, resolve_range_start(range))
+    eligible_logs = filter_logs_up_to_date(workout_logs, reference_date)
+    filtered_logs = filter_logs_in_range(eligible_logs, resolve_range_start(range, reference_date))
     return build_exercise_detail_series(
         workout_logs=filtered_logs,
         exercise_id=exercise_id,

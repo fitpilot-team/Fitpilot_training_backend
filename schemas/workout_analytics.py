@@ -14,6 +14,7 @@ def _stringify_id(value: object) -> str | None:
 
 WorkoutAnalyticsRange = Literal["4w", "8w", "12w", "24w", "all"]
 WorkoutAnalyticsHistoryStatusFilter = Literal["all", "in_progress", "completed", "abandoned"]
+WorkoutAnalyticsCalendarWeekStatus = Literal["none", "in_progress", "completed", "abandoned"]
 RepRangeColorToken = Literal["navy", "sky", "emerald", "amber", "rose", "violet"]
 
 
@@ -94,8 +95,16 @@ class WorkoutAnalyticsHistoryPageResponse(BaseModel):
     items: List[RecentWorkoutHistoryItemResponse] = Field(default_factory=list)
 
 
+class WorkoutAnalyticsCalendarWeekDayResponse(BaseModel):
+    date: date
+    status: WorkoutAnalyticsCalendarWeekStatus = "none"
+    sessions_count: int = 0
+    is_today: bool = False
+
+
 class WorkoutAnalyticsDashboardResponse(BaseModel):
     summary: WorkoutAnalyticsSummaryResponse
+    calendar_week: List[WorkoutAnalyticsCalendarWeekDayResponse] = Field(default_factory=list)
     rep_range_chart: List[RepRangeChartPointResponse] = Field(default_factory=list)
     exercise_summaries: List[ExerciseTrendSummaryResponse] = Field(default_factory=list)
     recent_history: List[RecentWorkoutHistoryItemResponse] = Field(default_factory=list)
