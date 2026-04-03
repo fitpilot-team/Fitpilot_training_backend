@@ -10,8 +10,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DEPLOY_ENV=${DEPLOY_ENV:-dev}
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
     depends_on:
       - redis
     networks:
