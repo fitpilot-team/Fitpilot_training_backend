@@ -1,5 +1,5 @@
 services:
-  backend:
+  training-backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
