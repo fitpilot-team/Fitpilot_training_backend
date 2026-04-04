@@ -26,6 +26,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    networks:
+      coolify:
+        aliases:
+          - training-backend
+      default:
+        aliases:
+          - training-backend
 
   redis:
     image: redis:7.2-alpine
