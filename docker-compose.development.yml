@@ -1,0 +1,39 @@
+services:
+  backend:
+    container_name: fitpilot-backend-${DEPLOY_ENV:-dev}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: ${BACKEND_IMAGE:-fitpilot-training-backend:local}
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEPLOY_ENV=${DEPLOY_ENV:-dev}
+    depends_on:
+      - redis
+    networks:
+      - default
+      - fitpilot-shared
+    restart: unless-stopped
+    volumes:
+      - ./static:/app/static
+
+  redis:
+    container_name: fitpilot-redis-${DEPLOY_ENV:-dev}
+    image: redis:7.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    name: ${REDIS_VOLUME_NAME:-fitpilot-redis-data}
+
+networks:
+  fitpilot-shared:
+    external: true
+    name: fitpilot-shared
