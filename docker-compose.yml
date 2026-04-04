@@ -54,6 +54,5 @@ volumes:
 networks:
   coolify:
     external: true
-    name: coolify-proxy
   default:
     driver: bridge
