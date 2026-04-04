@@ -43,3 +43,9 @@ services:
 volumes:
   redis_data:
     name: ${REDIS_VOLUME_NAME:-fitpilot-redis-data}
+
+networks:
+  coolify:
+    external: true
+  default:
+    driver: bridge
