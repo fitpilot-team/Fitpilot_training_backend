@@ -25,6 +25,7 @@ from api.routers import (
     workout_logs,
 )
 
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
