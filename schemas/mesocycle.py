@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 from datetime import date, datetime, timezone
-from typing import Optional, List
+from typing import Literal, Optional, List
 from models.mesocycle import MesocycleStatus, IntensityLevel, EffortType, TempoType, SetType, ExercisePhase
 from schemas.exercise import ExerciseResponse
 
@@ -102,6 +102,28 @@ class DayExerciseResponse(DayExerciseBase):
     @classmethod
     def validate_updated_at(cls, value: Optional[datetime], info: ValidationInfo) -> datetime:
         return _normalize_updated_at(value, info)
+
+
+TransferExerciseMode = Literal["move", "clone"]
+
+
+class DayExerciseTransferRequest(BaseModel):
+    mode: TransferExerciseMode
+    from_day_id: int
+    to_day_id: int
+    new_index: int = Field(ge=0)
+    phase: ExercisePhase = ExercisePhase.MAIN
+
+
+class DayExerciseTransferResponse(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    mode: TransferExerciseMode
+    source_day_id: str
+    target_day_id: str
+    transferred_exercise: DayExerciseResponse
+    source_day_exercises: List[DayExerciseResponse]
+    target_day_exercises: List[DayExerciseResponse]
 
 
 # =============== TrainingDay Schemas ===============

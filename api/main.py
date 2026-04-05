@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from core.config import settings
 from core.cors import LOCAL_LAN_ORIGIN_REGEX, resolve_allowed_origins
+from core.startup import validate_media_storage_startup_health
 from core.timing import elapsed_ms
 from api.routers import (
     ai_generator,
@@ -42,6 +43,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def log_media_storage_startup_health() -> None:
+    validate_media_storage_startup_health()
 
 
 @app.middleware("http")

@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from typing import List
-from pydantic import BaseModel
 from models.base import get_db
 from models.user import User
-from models.mesocycle import DayExercise
+from models.mesocycle import DayExercise, ExercisePhase
 from models.exercise import Exercise
 from schemas.mesocycle import (
-    DayExerciseCreate, DayExerciseUpdate, DayExerciseResponse
+    DayExerciseCreate,
+    DayExerciseTransferRequest,
+    DayExerciseTransferResponse,
+    DayExerciseUpdate,
+    DayExerciseResponse,
 )
 from core.dependencies import (
     assert_macrocycle_access,
@@ -18,13 +22,34 @@ from core.dependencies import (
     get_training_day_or_404,
 )
 
+router = APIRouter()
+
+DAY_EXERCISE_COPY_FIELDS = (
+    "exercise_id",
+    "sets",
+    "reps_min",
+    "reps_max",
+    "rest_seconds",
+    "effort_type",
+    "effort_value",
+    "tempo",
+    "set_type",
+    "duration_seconds",
+    "intensity_zone",
+    "distance_meters",
+    "target_calories",
+    "intervals",
+    "work_seconds",
+    "interval_rest_seconds",
+    "notes",
+    "rpe_target",
+)
+
 
 class MoveExerciseRequest(BaseModel):
     from_day_id: int
     to_day_id: int
     new_index: int
-
-router = APIRouter()
 
 
 def verify_training_day_access(db: Session, training_day_id: int, current_user: User):
@@ -67,6 +92,83 @@ def ensure_exercise_exists(db: Session, exercise_id: int) -> Exercise:
     return exercise
 
 
+def list_day_exercises_for_day(db: Session, training_day_id: int) -> list[DayExercise]:
+    return db.query(DayExercise).options(
+        joinedload(DayExercise.exercise)
+    ).filter(
+        DayExercise.training_day_id == training_day_id
+    ).order_by(
+        DayExercise.order_index,
+        DayExercise.id,
+    ).all()
+
+
+def clamp_insert_index(new_index: int, collection_size: int) -> int:
+    return max(0, min(new_index, collection_size))
+
+
+def reindex_day_exercises(day_exercises: list[DayExercise]) -> None:
+    for index, exercise in enumerate(day_exercises):
+        exercise.order_index = index
+
+
+def build_day_exercise_copy(
+    source_exercise: DayExercise,
+    *,
+    training_day_id: int,
+    order_index: int,
+    phase: ExercisePhase | str | None = None,
+    notes: str | None = None,
+) -> DayExercise:
+    exercise_data = {
+        field: getattr(source_exercise, field)
+        for field in DAY_EXERCISE_COPY_FIELDS
+    }
+    exercise_data["training_day_id"] = training_day_id
+    exercise_data["order_index"] = order_index
+    exercise_data["phase"] = phase or source_exercise.phase
+    if notes is not None:
+        exercise_data["notes"] = notes
+    return DayExercise(**exercise_data)
+
+
+def apply_day_exercise_transfer(
+    *,
+    mode: str,
+    exercise: DayExercise,
+    source_day_exercises: list[DayExercise],
+    target_day_exercises: list[DayExercise],
+    target_day_id: int,
+    requested_index: int,
+    target_phase: ExercisePhase | str,
+) -> DayExercise:
+    normalized_index = clamp_insert_index(requested_index, len(target_day_exercises))
+
+    if mode == "move":
+        source_without_exercise = [
+            source_exercise
+            for source_exercise in source_day_exercises
+            if source_exercise.id != exercise.id
+        ]
+        target_day_exercises.insert(normalized_index, exercise)
+        exercise.training_day_id = target_day_id
+        exercise.phase = target_phase
+        reindex_day_exercises(source_without_exercise)
+        reindex_day_exercises(target_day_exercises)
+        source_day_exercises[:] = source_without_exercise
+        return exercise
+
+    cloned_exercise = build_day_exercise_copy(
+        exercise,
+        training_day_id=target_day_id,
+        order_index=normalized_index,
+        phase=target_phase,
+    )
+    target_day_exercises.insert(normalized_index, cloned_exercise)
+    reindex_day_exercises(target_day_exercises)
+    return cloned_exercise
+
+
 @router.get("/training-day/{training_day_id}", response_model=list[DayExerciseResponse])
 def list_day_exercises_by_training_day(
     training_day_id: int,
@@ -78,13 +180,7 @@ def list_day_exercises_by_training_day(
     verify_training_day_access(db, training_day_id, current_user)
 
     # Get all exercises ordered by order_index, with exercise details loaded
-    day_exercises = db.query(DayExercise).options(
-        joinedload(DayExercise.exercise)
-    ).filter(
-        DayExercise.training_day_id == training_day_id
-    ).order_by(DayExercise.order_index).all()
-
-    return day_exercises
+    return list_day_exercises_for_day(db, training_day_id)
 
 
 @router.get("/{day_exercise_id}", response_model=DayExerciseResponse)
@@ -260,36 +356,105 @@ def duplicate_day_exercise(
 
     # Get original exercise
     original_exercise = get_day_exercise_with_access(db, day_exercise_id, current_user)
-
-    # Create duplicate with next order_index
-    new_exercise = DayExercise(
-        training_day_id=original_exercise.training_day_id,
-        exercise_id=original_exercise.exercise_id,
-        order_index=original_exercise.order_index + 1,
-        sets=original_exercise.sets,
-        reps_min=original_exercise.reps_min,
-        reps_max=original_exercise.reps_max,
-        rest_seconds=original_exercise.rest_seconds,
-        effort_type=original_exercise.effort_type,
-        effort_value=original_exercise.effort_value,
-        tempo=original_exercise.tempo,
-        notes=f"{original_exercise.notes} (Copy)" if original_exercise.notes else "Copy"
+    target_day_exercises = list_day_exercises_for_day(db, original_exercise.training_day_id)
+    original_index = next(
+        (
+            index
+            for index, exercise in enumerate(target_day_exercises)
+            if exercise.id == original_exercise.id
+        ),
+        None,
     )
+    if original_index is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original exercise not found in its training day"
+        )
 
-    # Shift all subsequent exercises
-    subsequent_exercises = db.query(DayExercise).filter(
-        DayExercise.training_day_id == original_exercise.training_day_id,
-        DayExercise.order_index > original_exercise.order_index
-    ).all()
-
-    for ex in subsequent_exercises:
-        ex.order_index += 1
+    new_exercise = build_day_exercise_copy(
+        original_exercise,
+        training_day_id=original_exercise.training_day_id,
+        order_index=original_index + 1,
+        notes=f"{original_exercise.notes} (Copy)" if original_exercise.notes else "Copy",
+    )
+    target_day_exercises.insert(original_index + 1, new_exercise)
+    reindex_day_exercises(target_day_exercises)
 
     db.add(new_exercise)
     db.commit()
     db.refresh(new_exercise)
 
-    return new_exercise
+    return db.query(DayExercise).options(
+        joinedload(DayExercise.exercise)
+    ).filter(DayExercise.id == new_exercise.id).first()
+
+
+@router.post("/{day_exercise_id}/transfer", response_model=DayExerciseTransferResponse)
+def transfer_day_exercise_between_days(
+    day_exercise_id: int,
+    request: DayExerciseTransferRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Move or clone an exercise between training days.
+
+    The operation is transactional and returns the full source and target day state
+    so the frontend can update both columns without a follow-up fetch.
+    """
+    assert_training_professional_access(current_user)
+
+    exercise = get_day_exercise_with_access(db, day_exercise_id, current_user)
+    verify_training_day_access(db, request.from_day_id, current_user)
+    verify_training_day_access(db, request.to_day_id, current_user)
+
+    if exercise.training_day_id != request.from_day_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Exercise is not in the specified source day"
+        )
+
+    source_day_exercises = list_day_exercises_for_day(db, request.from_day_id)
+    target_day_exercises = list_day_exercises_for_day(db, request.to_day_id)
+
+    if request.mode == "move" and request.from_day_id == request.to_day_id:
+        source_day_exercises = [
+            day_exercise
+            for day_exercise in source_day_exercises
+            if day_exercise.id != exercise.id
+        ]
+        target_day_exercises = list(source_day_exercises)
+
+    transferred_exercise = apply_day_exercise_transfer(
+        mode=request.mode,
+        exercise=exercise,
+        source_day_exercises=source_day_exercises,
+        target_day_exercises=target_day_exercises,
+        target_day_id=request.to_day_id,
+        requested_index=request.new_index,
+        target_phase=request.phase,
+    )
+
+    if request.mode == "clone":
+        db.add(transferred_exercise)
+
+    db.commit()
+    db.refresh(transferred_exercise)
+    transferred_exercise = db.query(DayExercise).options(
+        joinedload(DayExercise.exercise)
+    ).filter(DayExercise.id == transferred_exercise.id).first()
+
+    source_response = list_day_exercises_for_day(db, request.from_day_id)
+    target_response = list_day_exercises_for_day(db, request.to_day_id)
+
+    return {
+        "mode": request.mode,
+        "source_day_id": request.from_day_id,
+        "target_day_id": request.to_day_id,
+        "transferred_exercise": transferred_exercise,
+        "source_day_exercises": source_response,
+        "target_day_exercises": target_response,
+    }
 
 
 @router.patch("/{day_exercise_id}/move", response_model=DayExerciseResponse)
