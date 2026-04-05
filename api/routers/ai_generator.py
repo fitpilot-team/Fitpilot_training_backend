@@ -6,7 +6,7 @@ import logging
 from datetime import timedelta
 from enum import Enum
 from uuid import uuid4
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import Any, Optional
 
@@ -33,6 +33,7 @@ from core.dependencies import (
     get_current_user,
 )
 from services.ai_generator import AIWorkoutGenerator, ExerciseMapper
+from services.assignment_notifications import send_assignment_notification
 from services.ai_slotting import normalize_exercise_id
 from services.interview_mapper import InterviewToAIRequestMapper
 from services.patient_context import build_patient_context
@@ -941,6 +942,7 @@ async def preview_workout(
 @router.post("/save")
 async def save_generated_workout(
     save_request: SaveWorkoutRequest,
+    request: Request = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1152,6 +1154,40 @@ async def save_generated_workout(
             )
         if warnings:
             response["warning"] = " | ".join(warnings)
+
+        if (
+            save_request.notify_client
+            and save_request.creation_mode == CreationMode.CLIENT
+            and save_request.client_id
+        ):
+            try:
+                client_id = int(save_request.client_id)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "assignment_notification.dispatch_failed",
+                    extra={
+                        "clientId": save_request.client_id,
+                        "domain": "training",
+                        "entityId": macrocycle.id,
+                        "assignmentKind": "ai_create",
+                        "cause": "invalid_client_id",
+                    },
+                )
+            else:
+                await send_assignment_notification(
+                    authorization=request.headers.get("Authorization") if request else None,
+                    client_id=client_id,
+                    domain="training",
+                    entity_id=int(macrocycle.id),
+                    entity_name=macrocycle.name,
+                    assignment_kind="ai_create",
+                    start_date=macrocycle.start_date.isoformat()
+                    if macrocycle.start_date
+                    else None,
+                    end_date=macrocycle.end_date.isoformat()
+                    if macrocycle.end_date
+                    else None,
+                )
 
         return response
 

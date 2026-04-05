@@ -56,6 +56,7 @@ from prompts.workout_generator import (  # noqa: E402
 from schemas.ai_generator import (  # noqa: E402
     AIWorkoutRequest,
     AIWorkoutResponse,
+    CreationMode,
     GenerationMetadata,
     GeneratedMacrocycle,
     GeneratedMesocycle,
@@ -433,6 +434,84 @@ def test_save_persists_more_than_one_microcycle(monkeypatch) -> None:
     assert len(persisted_microcycles) == 3
     assert len(persisted_days) == 3
     assert len(persisted_day_exercises) == 3
+
+
+def test_save_dispatches_assignment_notification_for_client_mode(monkeypatch) -> None:
+    save_request = build_save_request(1)
+    save_request.client_id = "41"
+    save_request.notify_client = True
+    session = SaveSession(build_exercises())
+    current_user = SimpleNamespace(id=77)
+    dispatched = {}
+
+    monkeypatch.setattr(ai_router, "_ensure_trainer_or_admin", lambda user: None)
+
+    async def fake_send_assignment_notification(**kwargs):
+        dispatched.update(kwargs)
+
+    monkeypatch.setattr(
+        ai_router,
+        "send_assignment_notification",
+        fake_send_assignment_notification,
+    )
+
+    response = asyncio.run(
+        ai_router.save_generated_workout(
+            save_request,
+            request=SimpleNamespace(headers={"Authorization": "Bearer ai-token"}),
+            db=session,
+            current_user=current_user,
+        )
+    )
+    persisted_macrocycle = next(
+        obj for obj in session.added if isinstance(obj, Macrocycle)
+    )
+
+    assert response["success"] is True
+    assert session.committed is True
+    assert dispatched["authorization"] == "Bearer ai-token"
+    assert dispatched["client_id"] == 41
+    assert dispatched["domain"] == "training"
+    assert dispatched["entity_id"] == 1
+    assert dispatched["entity_name"] == "Programa 1 semanas"
+    assert dispatched["assignment_kind"] == "ai_create"
+    assert dispatched["start_date"] == persisted_macrocycle.start_date.isoformat()
+    assert dispatched["end_date"] == persisted_macrocycle.end_date.isoformat()
+
+
+def test_save_skips_assignment_notification_for_template_mode(monkeypatch) -> None:
+    save_request = build_save_request(1)
+    save_request.creation_mode = CreationMode.TEMPLATE
+    save_request.client_id = None
+    save_request.template_name = "Plantilla AI"
+    save_request.notify_client = True
+    session = SaveSession(build_exercises())
+    current_user = SimpleNamespace(id=77)
+    dispatched = {"called": False}
+
+    monkeypatch.setattr(ai_router, "_ensure_trainer_or_admin", lambda user: None)
+
+    async def fail_send_assignment_notification(**kwargs):
+        dispatched["called"] = True
+
+    monkeypatch.setattr(
+        ai_router,
+        "send_assignment_notification",
+        fail_send_assignment_notification,
+    )
+
+    response = asyncio.run(
+        ai_router.save_generated_workout(
+            save_request,
+            request=SimpleNamespace(headers={"Authorization": "Bearer ai-token"}),
+            db=session,
+            current_user=current_user,
+        )
+    )
+
+    assert response["success"] is True
+    assert session.committed is True
+    assert dispatched["called"] is False
 
 
 def test_response_models_accept_optional_generation_metadata() -> None:

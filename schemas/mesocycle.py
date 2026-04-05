@@ -281,6 +281,8 @@ class MacrocycleBase(BaseModel):
 
 
 class MacrocycleCreate(MacrocycleBase):
+    notify_client: bool = False
+    assignment_kind: Literal["template_assign", "manual_create"] = "manual_create"
     mesocycles: Optional[List[MesocycleCreate]] = []
 
 
