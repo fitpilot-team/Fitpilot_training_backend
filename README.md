@@ -43,6 +43,19 @@ Si falla conectividad Redis despues del deploy:
 2. Re-ejecutar deploy de `main` para `fitpilot-training-backend`.
 3. Verificar logs y mantener modo fail-open mientras se corrige red/ACL de Redis compartido.
 
+### Variables de entorno en VPS
+
+- El workflow de deploy sincroniza `docker-compose.release.yml`, pero no sincroniza el `.env` del VPS.
+- Antes de desplegar, confirma que el archivo objetivo (`VPS_BACKEND_ENV_FILE`, por defecto `/opt/Fitpilot_training_backend/.env`) exista y tenga valores no vacios para:
+  - `DATABASE_URL`
+  - `NUTRITION_JWT_SECRETS`
+  - `R2_ENDPOINT`
+  - `R2_BUCKET`
+  - `R2_ACCESS_KEY_ID`
+  - `R2_SECRET_ACCESS_KEY`
+  - `R2_PUBLIC_BASE_URL`
+- El workflow ahora aborta el deploy si falta cualquiera de esas variables para evitar un backend healthy con uploads rotos.
+
 ### Validacion de esquema (dry-run)
 
 El servicio `training-schema-check` ejecuta:
@@ -107,6 +120,8 @@ The upgrade is idempotent and covers:
 Exercise media now uploads only to Cloudflare R2 and persists public CDN URLs (`R2_PUBLIC_BASE_URL/...`).
 
 New exercise media and profile images no longer write to local disk.
+
+At startup the API logs a warning if the R2 configuration is incomplete. The service remains healthy, but upload endpoints will fail until the missing `R2_*` values are fixed in the VPS `.env`.
 
 ## AI generator
 
