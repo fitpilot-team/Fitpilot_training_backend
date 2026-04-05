@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ALLOWED_ORIGINS: Optional[str] = None
     MOBILE_SCHEME: str = "fitpilot://"
+    NUTRITION_API_URL: str = "http://localhost:3000"
 
     # Cross-service auth compatibility (Nutrition -> Training)
     NUTRITION_JWT_SECRETS: str

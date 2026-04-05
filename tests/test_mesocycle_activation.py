@@ -44,6 +44,7 @@ from api.routers import mesocycles as mesocycles_router  # noqa: E402
 from core.dependencies import get_current_user  # noqa: E402
 from models.base import get_db  # noqa: E402
 from models.mesocycle import IntensityLevel, MesocycleStatus  # noqa: E402
+from schemas.mesocycle import MacrocycleCreate  # noqa: E402
 
 
 UTC = timezone.utc
@@ -59,6 +60,26 @@ class CommitTrackingSession:
 
     def rollback(self):
         self.rollback_calls += 1
+
+
+class CreateMacrocycleSession(CommitTrackingSession):
+    def __init__(self):
+        super().__init__()
+        self.added = []
+        self.refreshed = []
+        self._next_id = 700
+
+    def add(self, obj):
+        self.added.append(obj)
+
+    def flush(self):
+        for obj in self.added:
+            if getattr(obj, "id", None) is None:
+                obj.id = self._next_id
+                self._next_id += 1
+
+    def refresh(self, obj):
+        self.refreshed.append(obj)
 
 
 def _dt(year: int, month: int, day: int) -> datetime:
@@ -357,3 +378,90 @@ def test_activate_macrocycle_propagates_forbidden_access(monkeypatch) -> None:
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Not authorized to modify this macrocycle"
+
+
+def test_create_macrocycle_dispatches_assignment_notification(monkeypatch) -> None:
+    session = CreateMacrocycleSession()
+    current_user = SimpleNamespace(id=5, role="trainer", is_active=True)
+    dispatched = {}
+
+    monkeypatch.setattr(
+        mesocycles_router,
+        "assert_training_professional_access",
+        lambda user: None,
+    )
+    monkeypatch.setattr(
+        mesocycles_router,
+        "send_assignment_notification_sync",
+        lambda **kwargs: dispatched.update(kwargs),
+    )
+
+    payload = MacrocycleCreate(
+        name="Programa base",
+        description="Bloque inicial",
+        objective="hypertrophy",
+        start_date=date(2026, 4, 1),
+        end_date=date(2026, 4, 28),
+        client_id=33,
+        notify_client=True,
+        assignment_kind="manual_create",
+        mesocycles=[],
+    )
+
+    response = mesocycles_router.create_macrocycle(
+        payload,
+        request=SimpleNamespace(headers={"Authorization": "Bearer training-token"}),
+        db=session,
+        current_user=current_user,
+    )
+
+    assert response.client_id == 33
+    assert session.commit_calls == 1
+    assert dispatched == {
+        "authorization": "Bearer training-token",
+        "client_id": 33,
+        "domain": "training",
+        "entity_id": 700,
+        "entity_name": "Programa base",
+        "assignment_kind": "manual_create",
+        "start_date": "2026-04-01",
+        "end_date": "2026-04-28",
+    }
+
+
+def test_create_macrocycle_skips_assignment_notification_without_opt_in(monkeypatch) -> None:
+    session = CreateMacrocycleSession()
+    current_user = SimpleNamespace(id=5, role="trainer", is_active=True)
+    dispatched = {"called": False}
+
+    monkeypatch.setattr(
+        mesocycles_router,
+        "assert_training_professional_access",
+        lambda user: None,
+    )
+    monkeypatch.setattr(
+        mesocycles_router,
+        "send_assignment_notification_sync",
+        lambda **kwargs: dispatched.__setitem__("called", True),
+    )
+
+    payload = MacrocycleCreate(
+        name="Programa plantilla",
+        description=None,
+        objective="strength",
+        start_date=date(2026, 4, 1),
+        end_date=date(2026, 4, 28),
+        client_id=33,
+        notify_client=False,
+        mesocycles=[],
+    )
+
+    mesocycles_router.create_macrocycle(
+        payload,
+        request=SimpleNamespace(headers={"Authorization": "Bearer training-token"}),
+        db=session,
+        current_user=current_user,
+    )
+
+    assert session.commit_calls == 1
+    assert dispatched["called"] is False

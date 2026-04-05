@@ -547,6 +547,7 @@ class WorkoutData(BaseModel):
 
 class SaveWorkoutRequest(AIWorkoutRequest):
     """Request para guardar un programa generado - extiende AIWorkoutRequest"""
+    notify_client: bool = False
     workout_data: WorkoutData
 
 

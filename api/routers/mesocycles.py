@@ -27,6 +27,7 @@ from core.dependencies import (
     get_current_user,
     get_effective_user_role,
 )
+from services.assignment_notifications import send_assignment_notification_sync
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -572,6 +573,7 @@ def get_macrocycle(
 @router.post("", response_model=MacrocycleResponse, status_code=status.HTTP_201_CREATED)
 def create_macrocycle(
     macrocycle_data: MacrocycleCreate,
+    request: Request = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -583,7 +585,9 @@ def create_macrocycle(
     assert_training_professional_access(current_user)
 
     # Create macrocycle
-    macrocycle_dict = macrocycle_data.model_dump(exclude={"mesocycles"})
+    macrocycle_dict = macrocycle_data.model_dump(
+        exclude={"mesocycles", "notify_client", "assignment_kind"},
+    )
     macrocycle_dict["trainer_id"] = current_user.id
 
     new_macrocycle = Macrocycle(**macrocycle_dict)
@@ -597,6 +601,22 @@ def create_macrocycle(
 
     db.commit()
     db.refresh(new_macrocycle)
+
+    if macrocycle_data.notify_client and new_macrocycle.client_id is not None:
+        send_assignment_notification_sync(
+            authorization=request.headers.get("Authorization") if request else None,
+            client_id=int(new_macrocycle.client_id),
+            domain="training",
+            entity_id=int(new_macrocycle.id),
+            entity_name=new_macrocycle.name,
+            assignment_kind=macrocycle_data.assignment_kind,
+            start_date=new_macrocycle.start_date.isoformat()
+            if new_macrocycle.start_date
+            else None,
+            end_date=new_macrocycle.end_date.isoformat()
+            if new_macrocycle.end_date
+            else None,
+        )
 
     return new_macrocycle
 
